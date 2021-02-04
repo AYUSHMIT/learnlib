@@ -18,6 +18,7 @@ package de.learnlib.api.oracle;
 import java.util.Collection;
 
 import de.learnlib.api.query.Query;
+import net.automatalib.automata.oca.automatoncountervalues.AcceptingOrExit;
 import net.automatalib.words.Word;
 
 /**
@@ -53,5 +54,7 @@ public interface SingleQueryOracle<I, D> extends MembershipOracle<I, D> {
     interface SingleQueryOracleDFA<I> extends SingleQueryOracle<I, Boolean>, DFAMembershipOracle<I> {}
 
     interface SingleQueryOracleMealy<I, O> extends SingleQueryOracle<I, Word<O>>, MealyMembershipOracle<I, O> {}
+
+    interface SingleQueryOracleAutomatonWithCounterValues<I> extends SingleQueryOracle<I, AcceptingOrExit>, AutomatonWithCounterValuesMembershipOracle<I> {}
 
 }

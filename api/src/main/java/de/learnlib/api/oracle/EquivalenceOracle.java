@@ -19,6 +19,7 @@ import java.util.Collection;
 
 import de.learnlib.api.query.DefaultQuery;
 import net.automatalib.automata.fsa.DFA;
+import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.words.Word;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -84,4 +85,13 @@ public interface EquivalenceOracle<A, I, D> {
      */
     interface MealyEquivalenceOracle<I, O> extends EquivalenceOracle<MealyMachine<?, I, ?, O>, I, Word<O>> {}
 
+    /**
+     * A specialization of the {@link EquivalenceOracle} interface for a ROCA learning scenario.
+     * 
+     * @param <I>
+     *         input symbol class
+     * 
+     * @author Gaëtan Staquet
+     */
+    interface ROCAEquivalenceOracle<I> extends EquivalenceOracle<ROCA<?, I>, I, Boolean> {}
 }

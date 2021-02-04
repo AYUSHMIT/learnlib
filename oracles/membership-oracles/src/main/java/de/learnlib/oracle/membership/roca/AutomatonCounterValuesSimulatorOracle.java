@@ -16,24 +16,31 @@ import net.automatalib.words.Word;
  * 
  * @author Gaëtan Staquet
  */
-public final class AutomatonCounterValuesSimulatorOracle<I> implements SingleQueryOracle<I, AcceptingOrExit> {
+public final class AutomatonCounterValuesSimulatorOracle<I> implements SingleQueryOracle.SingleQueryOracleAutomatonWithCounterValues<I> {
 
     private final ROCA<?, I> roca;
     private AutomatonWithCounterValues<?, I> reference;
-    private int maxCounterValue = 0;
+    private int counterLimit = 0;
 
     public AutomatonCounterValuesSimulatorOracle(final ROCA<?, I> roca) {
         this.roca = roca;
         reference = OCAUtil.constructRestrictedAutomaton(roca, 0);
     }
 
-    public void incrementMaxCounterValue() {
-        setMaxCounterValue(maxCounterValue + 1);
+    @Override
+    public void incrementCounterLimit() {
+        setCounterLimit(counterLimit + 1);
     }
 
-    public void setMaxCounterValue(int maxCounterValue) {
-        this.maxCounterValue = maxCounterValue;
-        reference = OCAUtil.constructRestrictedAutomaton(roca, maxCounterValue);
+    @Override
+    public void setCounterLimit(int counterLimit) {
+        this.counterLimit = counterLimit;
+        reference = OCAUtil.constructRestrictedAutomaton(roca, counterLimit);
+    }
+
+    @Override
+    public int getCounterLimit() {
+        return counterLimit;
     }
 
     @Override

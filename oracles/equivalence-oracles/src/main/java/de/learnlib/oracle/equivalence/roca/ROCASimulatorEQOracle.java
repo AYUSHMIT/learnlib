@@ -16,7 +16,7 @@ import net.automatalib.words.Word;
  * 
  * @author Gaëtan Staquet
  */
-public final class ROCASimulatorEQOracle<I> implements EquivalenceOracle<ROCA<?, I>, I, Boolean> {
+public final class ROCASimulatorEQOracle<I> implements EquivalenceOracle.ROCAEquivalenceOracle<I> {
 
     private final ROCA<?, I> reference;
     private final Alphabet<I> alphabet;
