@@ -15,9 +15,13 @@
  */
 package de.learnlib.api.algorithm;
 
+import java.util.List;
+
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.query.DefaultQuery;
 import net.automatalib.automata.fsa.DFA;
+import net.automatalib.automata.oca.ROCA;
+import net.automatalib.automata.oca.automatoncountervalues.AcceptingOrExit;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.words.Word;
 
@@ -76,4 +80,12 @@ public interface LearningAlgorithm<M, I, D> {
     interface DFALearner<I> extends LearningAlgorithm<DFA<?, I>, I, Boolean> {}
 
     interface MealyLearner<I, O> extends LearningAlgorithm<MealyMachine<?, I, ?, O>, I, Word<O>> {}
+
+    interface ROCALearner<I> extends LearningAlgorithm<ROCA<?, I>, I, AcceptingOrExit> {
+        List<ROCA<?, I>> getHypothesisModels();
+
+        ROCA<?, I> getLearntDFAAsROCA();
+
+        boolean hasRun(Word<I> word);
+    }
 }
