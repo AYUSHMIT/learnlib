@@ -62,7 +62,7 @@ public class CounterOracle<I, D> implements StatisticOracle<I, D> {
     @Override
     public void processQueries(Collection<? extends Query<I, D>> queries) {
         this.counter.increment(queries.size());
-        nextOracle.processQueries(queries);
+        getNextOracle().processQueries(queries);
     }
 
     @Override
@@ -81,5 +81,9 @@ public class CounterOracle<I, D> implements StatisticOracle<I, D> {
     @Override
     public void setNext(MembershipOracle<I, D> next) {
         this.nextOracle = next;
+    }
+
+    protected MembershipOracle<I, D> getNextOracle() {
+        return nextOracle;
     }
 }
