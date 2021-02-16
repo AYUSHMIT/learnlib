@@ -17,6 +17,8 @@ package de.learnlib.datastructure.observationtable;
 
 import de.learnlib.api.algorithm.LearningAlgorithm;
 import net.automatalib.automata.fsa.DFA;
+import net.automatalib.automata.oca.ROCA;
+import net.automatalib.automata.oca.automatoncountervalues.AcceptingOrExit;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.words.Word;
 
@@ -25,4 +27,6 @@ public interface OTLearner<M, I, D> extends LearningAlgorithm<M, I, D>, Observat
     interface OTLearnerDFA<I> extends DFALearner<I>, OTLearner<DFA<?, I>, I, Boolean> {}
 
     interface OTLearnerMealy<I, O> extends MealyLearner<I, O>, OTLearner<MealyMachine<?, I, ?, O>, I, Word<O>> {}
+
+    interface OTLearnerROCA<I> extends ROCALearner<I>, OTLearner<ROCA<?, I>, I, AcceptingOrExit> {}
 }
