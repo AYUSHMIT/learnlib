@@ -16,13 +16,13 @@ import net.automatalib.words.Word;
  * 
  * @author Gaëtan Staquet
  */
-public final class AutomatonCounterValuesSimulatorOracle<I> implements SingleQueryOracle.SingleQueryOracleAutomatonWithCounterValues<I> {
+public final class RestrictedAutomatonSimulatorOracle<I> implements SingleQueryOracle.SingleQueryOracleRestrictedAutomaton<I> {
 
     private final ROCA<?, I> roca;
     private AutomatonWithCounterValues<?, I> reference;
     private int counterLimit = 0;
 
-    public AutomatonCounterValuesSimulatorOracle(final ROCA<?, I> roca) {
+    public RestrictedAutomatonSimulatorOracle(final ROCA<?, I> roca) {
         this.roca = roca;
         reference = OCAUtil.constructRestrictedAutomaton(roca, 0);
     }

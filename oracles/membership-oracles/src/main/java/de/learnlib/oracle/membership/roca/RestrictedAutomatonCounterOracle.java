@@ -9,16 +9,16 @@ import net.automatalib.automata.oca.automatoncountervalues.AcceptingOrExit;
 import net.automatalib.words.Word;
 
 /**
- * A specific counter oracle for a {@link SingleQueryOracle.SingleQueryOracleAutomatonWithCounterValues}.
+ * A specific counter oracle for a {@link SingleQueryOracle.SingleQueryOracleRestrictedAutomaton}.
  * 
  * @author Gaëtan Staquet
  */
-public class AutomatonCounterValuesCounterOracle<I> extends CounterOracle<I, AcceptingOrExit>
-        implements SingleQueryOracle.SingleQueryOracleAutomatonWithCounterValues<I> {
+public class RestrictedAutomatonCounterOracle<I> extends CounterOracle<I, AcceptingOrExit>
+        implements SingleQueryOracle.SingleQueryOracleRestrictedAutomaton<I> {
 
-    private SingleQueryOracleAutomatonWithCounterValues<I> nextOracle;
+    private SingleQueryOracleRestrictedAutomaton<I> nextOracle;
 
-    public AutomatonCounterValuesCounterOracle(SingleQueryOracleAutomatonWithCounterValues<I> nextOracle, String name) {
+    public RestrictedAutomatonCounterOracle(SingleQueryOracleRestrictedAutomaton<I> nextOracle, String name) {
         super(nextOracle, name);
         this.nextOracle = nextOracle;
     }
@@ -45,10 +45,10 @@ public class AutomatonCounterValuesCounterOracle<I> extends CounterOracle<I, Acc
 
     @Override
     public void setNext(MembershipOracle<I, AcceptingOrExit> next) {
-        if (!SingleQueryOracleAutomatonWithCounterValues.class.isInstance(next)) {
+        if (!SingleQueryOracleRestrictedAutomaton.class.isInstance(next)) {
             throw new InvalidParameterException("The oracle used for automata with counter values must implement SingleQueryOracleAutomatonWithCounterValues");
         }
-        nextOracle = (SingleQueryOracleAutomatonWithCounterValues<I>) next;
+        nextOracle = (SingleQueryOracleRestrictedAutomaton<I>) next;
         super.setNext(next);
     }
     
