@@ -94,4 +94,18 @@ public interface EquivalenceOracle<A, I, D> {
      * @author Gaëtan Staquet
      */
     interface ROCAEquivalenceOracle<I> extends EquivalenceOracle<ROCA<?, I>, I, Boolean> {}
+
+    /**
+     * A specialization of the {@link EquivalenceOracle} interface for a restricted automaton (i.e., a DFA constructed from an ROCA, up to a given counter value) learning scenario.
+     * 
+     * @param <I> Input symbol class
+     * @author Gaëtan Staquet
+     */
+    interface RestrictedAutomatonEquivalenceOracle<I> extends EquivalenceOracle<DFA<?, I>, I, Boolean> {
+        public void incrementCounterLimit();
+
+        public void setCounterLimit(int counterLimit);
+        
+        public int getCounterLimit();
+    }
 }

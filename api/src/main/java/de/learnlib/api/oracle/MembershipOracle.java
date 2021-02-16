@@ -99,7 +99,7 @@ public interface MembershipOracle<I, D> extends QueryAnswerer<I, D>, BatchProces
      */
     interface MealyMembershipOracle<I, O> extends MembershipOracle<I, Word<O>> {}
 
-    interface AutomatonWithCounterValuesMembershipOracle<I> extends MembershipOracle<I, AcceptingOrExit> {
+    interface RestrictedAutomatonMembershipOracle<I> extends MembershipOracle<I, AcceptingOrExit> {
         public void incrementCounterLimit();
 
         public void setCounterLimit(int counterLimit);
