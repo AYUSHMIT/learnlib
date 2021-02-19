@@ -15,7 +15,7 @@
  */
 package de.learnlib.api.algorithm;
 
-import java.util.List;
+import java.util.Iterator;
 
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.query.DefaultQuery;
@@ -81,11 +81,36 @@ public interface LearningAlgorithm<M, I, D> {
 
     interface MealyLearner<I, O> extends LearningAlgorithm<MealyMachine<?, I, ?, O>, I, Word<O>> {}
 
+    /**
+     * Specialization of a learner for ROCAs.
+     * 
+     * Such a learner can yield multiple ROCAs each learning round.
+     * Thus, the experiment must ask multiple equivalence queries (one by possible ROCA).
+     * @author Gaëtan Staquet
+     */
     interface ROCALearner<I> extends LearningAlgorithm<ROCA<?, I>, I, AcceptingOrExit> {
-        List<ROCA<?, I>> getHypothesisModels();
+        /**
+         * As an ROCA learner can construct multiple ROCAs each iteration, this function should not be called.
+         * 
+         * See {@link getHypothesisModels()}.
+         */
+        @Override
+        default ROCA<?, I> getHypothesisModel() {
+            throw new UnsupportedOperationException("Since LStar for ROCA can construct multiple ROCAs in a round, please use getHypothesisModels()");
+        }
 
+        /**
+         * Gets every ROCA that can be constructed from the current knowledge such that the ROCAs are consistent with the knowledge.
+         * 
+         * In other words, it is guaranteed that the ROCA and the learner's knowledge agree on the representatives.
+         * @return An iterator over ROCAs
+         */
+        Iterator<ROCA<?, I>> getHypothesisModels();
+
+        /**
+         * Gets the learnt DFA (the restricted automaton up to a counter value) as an ROCA.
+         * @return An ROCA constructed from the learnt DFA
+         */
         ROCA<?, I> getLearntDFAAsROCA();
-
-        boolean hasRun(Word<I> word);
     }
 }
