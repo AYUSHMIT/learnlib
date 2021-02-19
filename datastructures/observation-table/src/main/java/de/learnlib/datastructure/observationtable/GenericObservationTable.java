@@ -61,17 +61,17 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *
  * @author Malte Isberner
  */
-public final class GenericObservationTable<I, D> implements MutableObservationTable<I, D>, Serializable {
+public class GenericObservationTable<I, D> implements MutableObservationTable<I, D>, Serializable {
 
-    private static final int NO_ENTRY = -1;
+    protected static final int NO_ENTRY = -1;
     private final List<RowImpl<I>> shortPrefixRows = new ArrayList<>();
     // private static final int NO_ENTRY = -1;
     private final List<RowImpl<I>> longPrefixRows = new ArrayList<>();
     private final List<RowImpl<I>> allRows = new ArrayList<>();
-    private final List<List<D>> allRowContents = new ArrayList<>();
-    private final List<@Nullable RowImpl<I>> canonicalRows = new ArrayList<>();
+    protected final List<List<D>> allRowContents = new ArrayList<>();
+    protected final List<@Nullable RowImpl<I>> canonicalRows = new ArrayList<>();
     // private final TObjectIntMap<List<D>> rowContentIds = new TObjectIntHashMap<>(10, 0.75f, NO_ENTRY);
-    private final Map<List<D>, Integer> rowContentIds = new HashMap<>(); // TODO: replace with primitive specialization
+    protected final Map<List<D>, Integer> rowContentIds = new HashMap<>(); // TODO: replace with primitive specialization
     private final Map<Word<I>, RowImpl<I>> rowMap = new HashMap<>();
     private final List<Word<I>> suffixes = new ArrayList<>();
     private final Set<Word<I>> suffixSet = new HashSet<>();
@@ -91,7 +91,7 @@ public final class GenericObservationTable<I, D> implements MutableObservationTa
         this.alphabetSize = alphabet.size();
     }
 
-    private static <I, D> void buildQueries(List<DefaultQuery<I, D>> queryList,
+    protected static <I, D> void buildQueries(List<DefaultQuery<I, D>> queryList,
                                             Word<I> prefix,
                                             List<? extends Word<I>> suffixes) {
         for (Word<I> suffix : suffixes) {
@@ -227,14 +227,14 @@ public final class GenericObservationTable<I, D> implements MutableObservationTa
      * @param numSuffixes
      *         the number of suffixes (queries)
      */
-    private static <I, D> void fetchResults(Iterator<DefaultQuery<I, D>> queryIt, List<D> output, int numSuffixes) {
+    protected static <I, D> void fetchResults(Iterator<DefaultQuery<I, D>> queryIt, List<D> output, int numSuffixes) {
         for (int j = 0; j < numSuffixes; j++) {
             DefaultQuery<I, D> qry = queryIt.next();
             output.add(qry.getOutput());
         }
     }
 
-    private boolean processContents(RowImpl<I> row, List<D> rowContents, boolean makeCanonical) {
+    protected boolean processContents(RowImpl<I> row, List<D> rowContents, boolean makeCanonical) {
         int contentId;
         boolean added = false;
         contentId = rowContentIds.getOrDefault(rowContents, NO_ENTRY);
