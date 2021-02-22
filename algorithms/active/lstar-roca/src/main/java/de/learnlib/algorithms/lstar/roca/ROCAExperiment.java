@@ -10,6 +10,7 @@ import de.learnlib.filter.statistic.Counter;
 import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.oca.automatoncountervalues.AcceptingOrExit;
+import net.automatalib.visualization.Visualization;
 import net.automatalib.words.Alphabet;
 
 /**
@@ -100,13 +101,11 @@ public final class ROCAExperiment<I> {
 
         while (true) {
             final Iterator<ROCA<?, I>> hypotheses = learningAlgorithm.getHypothesisModels();
-            System.out.println(hypotheses.hasNext());
 
             LOGGER.logPhase("Searching for counterexample");
             DefaultQuery<I, Boolean> counterexample = null;
             while (hypotheses.hasNext()) {
                 ROCA<?, I> hypothesis = hypotheses.next();
-                System.out.println(hypothesis);
                 if (logModels) {
                     LOGGER.logModel(hypothesis);
                 }
@@ -122,16 +121,18 @@ public final class ROCAExperiment<I> {
             }
 
             if (counterexample == null) {
-                // If none of the ROCAs was useful (or if there was no ROCAs at all), we
-                // directly take the learnt DFA as an ROCA.
+                // If there was no ROCAs in the previous loop, we directly take the learnt DFA
+                // as an ROCA.
                 // Note that we are sure the learnt restricted automaton is not big enough to
                 // contain the periodic part of the behavior graph.
                 // Also, we are sure the counterexample is a useful one as the DFA is correct on
                 // the restricted language.
-                // There is however an exception to the last point: if the target language is regular.
+                // There is however an exception to the last point: if the target language is
+                // regular.
                 // In that case, it is not guaranteed that an hypothesis could be created above.
                 // Thus, we end up here and use the learnt DFA as an ROCA.
-                // Since the language is regular, the DFA accepts the correct language, and so does the ROCA.
+                // Since the language is regular, the DFA accepts the correct language, and so
+                // does the ROCA.
                 ROCA<?, I> hypothesis = learningAlgorithm.getLearntDFAAsROCA();
                 profileStart(COUNTEREXAMPLE_PROFILE_KEY);
                 counterexample = equivalenceOracle.findCounterExample(hypothesis, alphabet);
