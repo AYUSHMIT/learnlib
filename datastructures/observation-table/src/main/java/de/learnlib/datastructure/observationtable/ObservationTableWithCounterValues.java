@@ -111,32 +111,63 @@ public class ObservationTableWithCounterValues<I> extends GenericObservationTabl
     }
 
     private CounterValueAssignment<I> createAllAssignments(List<CounterValueAssignment<I>> assignments,
-            ListIterator<Row<I>> nextRows) {
+            ListIterator<Row<I>> nextSpRows) {
         CounterValueAssignment<I> currentAssignment = assignments.get(assignments.size() - 1);
-        if (!nextRows.hasNext()) {
+        if (!nextSpRows.hasNext()) {
             // We have exhausted every row.
-            // We create a new assignment to use later.
-            CounterValueAssignment<I> newAssignment = new CounterValueAssignment<>();
-            newAssignment.addAll(currentAssignment);
-            assignments.add(newAssignment);
-            return newAssignment;
+            if (isValidAssignment(currentAssignment)) {
+                // We create a new assignment to use later.
+                CounterValueAssignment<I> newAssignment = new CounterValueAssignment<>();
+                newAssignment.addAll(currentAssignment);
+                assignments.add(newAssignment);
+                return newAssignment;
+            } else {
+                return currentAssignment;
+            }
         }
-        Row<I> row = nextRows.next();
+        Row<I> row = nextSpRows.next();
 
         Set<Integer> cvRow = counterValues.get(row.getRowId());
         if (cvRow.size() == 0) {
             // We just ignore the current row
-            currentAssignment = createAllAssignments(assignments, nextRows);
+            currentAssignment = createAllAssignments(assignments, nextSpRows);
         } else {
             for (Integer cv : cvRow) {
                 currentAssignment.setValue(row, cv);
-                currentAssignment = createAllAssignments(assignments, nextRows);
+                currentAssignment = createAllAssignments(assignments, nextSpRows);
                 currentAssignment.removeValue(row);
             }
         }
 
-        nextRows.previous();
+        nextSpRows.previous();
         return currentAssignment;
+    }
+
+    private boolean isValidAssignment(CounterValueAssignment<I> assignment) {
+        for (Row<I> row : getRepresentativeRows()) {
+            int rowCV = assignment.getValue(row);
+            if (rowCV != -1) {
+                Word<I> label = row.getLabel();
+                if (label != Word.epsilon()) {
+                    Word<I> prefix = label.prefix(label.size() - 1);
+                    Row<I> prefixRow = getRepresentativeForEquivalenceClass(getRow(prefix));
+                    int prefixCV = assignment.getValue(prefixRow);
+                    if (prefixCV == -1 || Math.abs(prefixCV - rowCV) > 1) {
+                        return false;
+                    }
+                }
+
+                for (I symbol : getInputAlphabet()) {
+                    Word<I> extended = label.append(symbol);
+                    Row<I> extendedRow = getRepresentativeForEquivalenceClass(getRow(extended));
+                    int extendedCV = assignment.getValue(extendedRow);
+                    if (extendedCV != -1 && Math.abs(extendedCV - rowCV) > 1) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
     }
 
     public int getCounterLimit() {
@@ -427,6 +458,25 @@ public class ObservationTableWithCounterValues<I> extends GenericObservationTabl
      */
     public boolean isAcceptingRow(Row<I> row) {
         return rowContents(row).get(0) == AcceptingOrExit.ACCEPTING;
+    }
+
+    public boolean isBinRow(Row<I> row) {
+        for (int i = 0; i < numberOfSuffixes(); i++) {
+            if (rowContents(row).get(i) != AcceptingOrExit.REJECTING) {
+                return false;
+            }
+        }
+        Word<I> label = row.getLabel();
+        for (I symbol : getInputAlphabet()) {
+            Word<I> extended = label.append(symbol);
+            Row<I> extendedRow = getRow(extended);
+            for (int i = 0 ; i < numberOfSuffixes() ; i++) {
+                if (rowContents(extendedRow).get(i) != AcceptingOrExit.REJECTING) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /**
