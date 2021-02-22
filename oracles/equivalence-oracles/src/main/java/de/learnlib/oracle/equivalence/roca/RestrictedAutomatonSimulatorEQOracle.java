@@ -8,7 +8,8 @@ import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.query.DefaultQuery;
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.oca.ROCA;
-import net.automatalib.util.automata.equivalence.NearLinearEquivalenceTest;
+import net.automatalib.util.automata.Automata;
+import net.automatalib.util.automata.fsa.DFAs;
 import net.automatalib.util.automata.oca.OCAUtil;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
@@ -50,6 +51,7 @@ public final class RestrictedAutomatonSimulatorEQOracle<I>
     public void setCounterLimit(int counterLimit) {
         this.counterLimit = counterLimit;
         reference = OCAUtil.constructRestrictedAutomaton(roca, counterLimit).toSimpleDFA();
+        reference = DFAs.complete(reference, alphabet);
     }
 
     @Override
@@ -60,7 +62,8 @@ public final class RestrictedAutomatonSimulatorEQOracle<I>
     @Override
     public @Nullable DefaultQuery<I, Boolean> findCounterExample(DFA<?, I> hypothesis,
             Collection<? extends I> inputs) {
-        Word<I> separator = NearLinearEquivalenceTest.findSeparatingWord(reference, hypothesis, alphabet, true);
+        hypothesis = DFAs.complete(hypothesis, alphabet);
+        Word<I> separator = Automata.findSeparatingWord(reference, hypothesis, alphabet);
 
         if (separator == null) {
             return null;
