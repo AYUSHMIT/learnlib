@@ -1,0 +1,101 @@
+package de.learnlib.examples.oca;
+
+import java.io.IOException;
+
+import de.learnlib.algorithms.lstar.roca.LStarROCA;
+import de.learnlib.algorithms.lstar.roca.ROCAExperiment;
+import de.learnlib.api.oracle.EquivalenceOracle;
+import de.learnlib.api.oracle.SingleQueryOracle;
+import de.learnlib.datastructure.observationtable.OTUtils;
+import de.learnlib.datastructure.observationtable.writer.ObservationTableASCIIWriter;
+import de.learnlib.oracle.equivalence.roca.ROCASimulatorEQOracle;
+import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonSimulatorEQOracle;
+import de.learnlib.oracle.membership.roca.RestrictedAutomatonCounterOracle;
+import de.learnlib.oracle.membership.roca.RestrictedAutomatonSimulatorOracle;
+import de.learnlib.util.statistics.SimpleProfiler;
+import net.automatalib.automata.oca.DefaultROCA;
+import net.automatalib.automata.oca.ROCA;
+import net.automatalib.automata.oca.ROCALocation;
+import net.automatalib.serialization.dot.GraphDOT;
+import net.automatalib.visualization.Visualization;
+import net.automatalib.words.Alphabet;
+import net.automatalib.words.impl.Alphabets;
+
+public class ROCAExample {
+    private ROCAExample() {
+    }
+
+    public static void main(String[] args) throws IOException {
+        ROCA<?, Character> target = constructSUL();
+        Alphabet<Character> alphabet = target.getAlphabet();
+
+        runExample(target, alphabet);
+    }
+
+    private static ROCA<?, Character> constructSUL() {
+        // L = {a^n b^m | n is odd and m > n}
+        Alphabet<Character> alphabet = Alphabets.characters('a', 'b');
+        DefaultROCA<Character> roca = new DefaultROCA<>(alphabet);
+
+        ROCALocation q0 = roca.addInitialLocation(false);
+        ROCALocation q1 = roca.addLocation(false);
+        ROCALocation q2 = roca.addLocation(true);
+
+        roca.setSuccessor(q0, 0, 'a', +1, q1);
+        roca.setSuccessor(q0, 1, 'a', +1, q1);
+
+        roca.setSuccessor(q1, 1, 'a', +1, q0);
+        roca.setSuccessor(q1, 1, 'b', 0, q2);
+
+        roca.setSuccessor(q2, 0, 'b', 0, q2);
+        roca.setSuccessor(q2, 1, 'b', -1, q2);
+
+        return roca;
+    }
+
+    private static <I> void runExample(ROCA<?, I> target, Alphabet<I> alphabet) throws IOException {
+        SingleQueryOracle.SingleQueryOracleRestrictedAutomaton<I> sul = new RestrictedAutomatonSimulatorOracle<>(target);
+        RestrictedAutomatonCounterOracle<I> membershipOracle = new RestrictedAutomatonCounterOracle<>(sul, "membership queries");
+
+        EquivalenceOracle.ROCAEquivalenceOracle<I> equivalenceOracle = new ROCASimulatorEQOracle<>(target);
+
+        RestrictedAutomatonSimulatorEQOracle<I> restrictedEquivalenceOracle = new RestrictedAutomatonSimulatorEQOracle<>(target, alphabet);
+
+        LStarROCA<I> lstar_roca = new LStarROCA<>(membershipOracle, restrictedEquivalenceOracle, alphabet);
+
+        ROCAExperiment<I> experiment = new ROCAExperiment<>(lstar_roca, equivalenceOracle, alphabet);
+        experiment.setLogModels(false);
+        experiment.setProfile(true);
+
+        experiment.run();
+
+        ROCA<?, I> result = experiment.getFinalHypothesis();
+
+        System.out.println("-------------------------------------------------------");
+
+        // profiling
+        System.out.println(SimpleProfiler.getResults());
+
+        // learning statistics
+        System.out.println(experiment.getRounds().getSummary());
+        System.out.println(membershipOracle.getStatisticalData().getSummary());
+
+        // model statistics
+        System.out.println("States: " + result.size());
+        System.out.println("Sigma: " + alphabet.size());
+
+        // show model
+        System.out.println();
+        System.out.println("Model: ");
+        GraphDOT.write(result, System.out); // may throw IOException!
+
+        Visualization.visualize(result);
+
+        System.out.println("-------------------------------------------------------");
+
+        System.out.println("Final observation table:");
+        new ObservationTableASCIIWriter<>().write(lstar_roca.getObservationTable(), System.out);
+
+        OTUtils.displayHTMLInBrowser(lstar_roca.getObservationTable());
+    }
+}
