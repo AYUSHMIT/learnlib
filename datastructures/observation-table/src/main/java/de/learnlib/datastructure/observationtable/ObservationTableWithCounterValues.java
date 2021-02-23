@@ -1,6 +1,7 @@
 package de.learnlib.datastructure.observationtable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -128,7 +129,7 @@ public class ObservationTableWithCounterValues<I> extends GenericObservationTabl
         Row<I> row = nextSpRows.next();
 
         Set<Integer> cvRow = counterValues.get(row.getRowId());
-        if (cvRow.size() == 0) {
+        if (cvRow.size() == 0 || isBinRow(row)) {
             // We just ignore the current row
             currentAssignment = createAllAssignments(assignments, nextSpRows);
         } else {
@@ -218,7 +219,6 @@ public class ObservationTableWithCounterValues<I> extends GenericObservationTabl
         }
 
         List<List<Row<I>>> unclosed = new ArrayList<>();
-        int numSpRows = numberOfDistinctRows();
 
         for (Row<I> lpRow : getLongPrefixRows()) {
             RowImpl<I> row = getRow(lpRow.getRowId());
@@ -226,19 +226,45 @@ public class ObservationTableWithCounterValues<I> extends GenericObservationTabl
             fetchResults(queryIt, newRowContents, numberOfSuffixes());
             List<AcceptingOrExit> currentRowContents = rowContents(row);
 
+            boolean isUnclosed = false;
             if (!seenContentIds.contains(row.getRowContentId())) {
-                processContents(row, newRowContents, false);
+                if (processContents(row, newRowContents, false)) {
+                    isUnclosed = true;
+                }
             } else {
                 for (int i = 0; i < numberOfSuffixes(); i++) {
                     if (currentRowContents.get(i) != newRowContents.get(i)) {
                         if (processContents(row, newRowContents, false)) {
-                            unclosed.add(new ArrayList<>());
-                        }
-
-                        if (row.getRowContentId() >= numSpRows) {
-                            unclosed.get(row.getRowContentId() - numSpRows).add(row);
+                            isUnclosed = true;
                         }
                     }
+                }
+            }
+
+            if (!isUnclosed) {
+                boolean hasRepresentative = false;
+                for (Row<I> spRow : getShortPrefixRows()) {
+                    if (areEquivalent(spRow, row)) {
+                        hasRepresentative = true;
+                        break;
+                    }
+                }
+                isUnclosed = !hasRepresentative;
+            }
+
+            if (isUnclosed) {
+                boolean foundOthers = false;
+                for (int i = 0 ; i < unclosed.size() && !foundOthers ; i++) {
+                    for (Row<I> r : unclosed.get(i)) {
+                        if (areEquivalent(r, row)) {
+                            unclosed.get(i).add(row);
+                            foundOthers = true;
+                        }
+                    }
+                }
+
+                if (!foundOthers) {
+                    unclosed.add(Collections.singletonList(row));
                 }
             }
             seenContentIds.add(row.getRowContentId());
