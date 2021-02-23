@@ -10,7 +10,6 @@ import de.learnlib.filter.statistic.Counter;
 import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.oca.automatoncountervalues.AcceptingOrExit;
-import net.automatalib.visualization.Visualization;
 import net.automatalib.words.Alphabet;
 
 /**
@@ -150,8 +149,8 @@ public final class ROCAExperiment<I> {
             LOGGER.logPhase("Learning");
 
             // We convert the Boolean to AcceptingOrExit
-            DefaultQuery<I, AcceptingOrExit> ce = new DefaultQuery<>(counterexample.getPrefix(),
-                    counterexample.getSuffix(), booleanToAcceptingOrExit(counterexample.getOutput()));
+            AcceptingOrExit acceptance = booleanToAcceptingOrExit(counterexample.getOutput());
+            DefaultQuery<I, AcceptingOrExit> ce = new DefaultQuery<>(counterexample.getPrefix(), counterexample.getSuffix(), acceptance);
 
             profileStart(LEARNING_ROCA_PROFILE_KEY);
             final boolean refined = learningAlgorithm.refineHypothesis(ce);
