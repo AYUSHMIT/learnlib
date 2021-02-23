@@ -30,7 +30,6 @@ import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.oca.automatoncountervalues.AcceptingOrExit;
 import net.automatalib.automata.oca.automatoncountervalues.DefaultAutomatonWithCounterValues;
 import net.automatalib.automata.oca.automatoncountervalues.DefaultAutomatonWithCounterValuesState;
-import net.automatalib.util.automata.oca.OCAUtil;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
 import net.automatalib.words.impl.Alphabets;
@@ -38,10 +37,14 @@ import net.automatalib.words.impl.Alphabets;
 /**
  * A learner based on L* for ROCAs.
  * 
- * More precisely, the learner learns a DFA accepting a sub-language of the target language up to a certain counter limit.
- * This sub-language is called the restricted language (and a DFA accepting that language is called a restricted automaton, see {@link AutomatonWithCounterValues}).
- * On top of that, the learner associates possible counter values to each row.
- * Once the restricted automaton is correctly learnt and the counter values computed, the learner proceeds to construct every possible ROCA using that automaton and the values.
+ * More precisely, the learner learns a DFA accepting a sub-language of the
+ * target language up to a certain counter limit. This sub-language is called
+ * the restricted language (and a DFA accepting that language is called a
+ * restricted automaton, see {@link AutomatonWithCounterValues}). On top of
+ * that, the learner associates possible counter values to each row. Once the
+ * restricted automaton is correctly learnt and the counter values computed, the
+ * learner proceeds to construct every possible ROCA using that automaton and
+ * the values.
  * 
  * @author Gaëtan Staquet
  */
@@ -67,21 +70,23 @@ public final class LStarROCA<I> implements OTLearner.OTLearnerROCA<I>,
         automataWithCounterValues.add(new DefaultAutomatonWithCounterValues<>(alphabet));
     }
 
-
     @Override
     public Iterator<ROCA<?, I>> getHypothesisModels() {
-        return new Iterator<ROCA<?,I>>(){
+        return new Iterator<ROCA<?, I>>() {
 
-            private final Iterator<DefaultAutomatonWithCounterValues<I>> automata = automataWithCounterValues.iterator();
+            private final Iterator<DefaultAutomatonWithCounterValues<I>> automata = automataWithCounterValues
+                    .iterator();
             private Iterator<ROCA<?, I>> rocas = null;
 
             @Override
             public boolean hasNext() {
                 while ((rocas == null || !rocas.hasNext()) && automata.hasNext()) {
                     DefaultAutomatonWithCounterValues<I> automaton = automata.next();
+                    // @formatter:off
                     List<ROCA<?, I>> goodRocas = automaton.toROCAs(table.getCounterLimit()).stream()
-                        .filter(roca -> isConsistent(roca))
-                        .collect(Collectors.toList());
+                            .filter(roca -> isConsistent(roca))
+                            .collect(Collectors.toList());
+                    // @formatter:on
                     rocas = goodRocas.iterator();
                 }
                 if (rocas == null) {
@@ -94,13 +99,25 @@ public final class LStarROCA<I> implements OTLearner.OTLearnerROCA<I>,
             public ROCA<?, I> next() {
                 return rocas.next();
             }
-            
+
         };
     }
 
     private boolean isConsistent(ROCA<?, I> roca) {
-        // We check that the given ROCA accepts the same language as the learnt DFA
-        return OCAUtil.testEquivalence(roca, getLearntDFAAsROCA(), alphabet);
+        // We want the ROCA to be correct with regards to the information stored in the table.
+        // That is, the ROCA and the table must agree on the acceptance of the words.
+        for (Row<I> row : table.getAllRows()) {
+            Word<I> prefix = row.getLabel();
+            List<AcceptingOrExit> rowContent = table.rowContents(row);
+            for (int i = 0 ; i < table.numberOfSuffixes() ; i++) {
+                Word<I> word = prefix.concat(table.getSuffix(i));
+                boolean shouldBeAccepted = rowContent.get(i) == AcceptingOrExit.ACCEPTING;
+                if (roca.accepts(word) != shouldBeAccepted) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     @Override
@@ -131,19 +148,16 @@ public final class LStarROCA<I> implements OTLearner.OTLearnerROCA<I>,
         // counter value needed to correctly accept (or reject) the word requires
         // multiple increments.
 
-        int oldDistinctRows = table.numberOfDistinctRows();
-
         List<List<Row<I>>> unclosed = ObservationTableCEXHandlers.handleClassicLStar(ceQuery, table, membershipOracle);
         completeConsistentTable(unclosed, true);
 
-        assert table.numberOfDistinctRows() > oldDistinctRows;
-
         while (MQUtil.isCounterexample(ceQuery, automataWithCounterValues.get(0))) {
-            table.computeCounterValues(false);
             membershipOracle.incrementCounterLimit();
             restrictedAutomatonEquivalenceOracle.incrementCounterLimit();
             unclosed = table.incrementCounterLimit(membershipOracle);
+
             completeConsistentTable(unclosed, true);
+            table.computeCounterValues(false);
 
             learnDFA();
 
@@ -324,7 +338,7 @@ public final class LStarROCA<I> implements OTLearner.OTLearnerROCA<I>,
 
             Map<Integer, DefaultAutomatonWithCounterValuesState> idToState = new HashMap<>();
             for (Row<I> representativeRow : representativeRows) {
-                if (!table.isExitRow(representativeRow)) {
+                if (!table.isExitRow(representativeRow) && !table.isBinRow(representativeRow)) {
                     boolean initial = representativeRow.getLabel() == Word.epsilon();
                     int cv = assignment.getValue(representativeRow);
                     DefaultAutomatonWithCounterValuesState state = createState(automaton, initial, representativeRow,
@@ -333,31 +347,32 @@ public final class LStarROCA<I> implements OTLearner.OTLearnerROCA<I>,
                 }
             }
 
-            DefaultAutomatonWithCounterValuesState exitState = null;
-
             for (Row<I> representativeRow : representativeRows) {
-                if (!table.isExitRow(representativeRow)) {
+                if (!table.isExitRow(representativeRow) && !table.isBinRow(representativeRow)) {
                     DefaultAutomatonWithCounterValuesState start = idToState.get(representativeRow.getRowId());
                     for (int i = 0; i < alphabet.size(); i++) {
                         Row<I> targetRow = representativeRow.getSuccessor(i);
                         if (targetRow != null) {
                             Row<I> targetRepresentativeRow = table.getRepresentativeForEquivalenceClass(targetRow);
-                            DefaultAutomatonWithCounterValuesState target;
-                            if (table.isExitRow(targetRow) || table.isExitRow(targetRepresentativeRow)) {
-                                if (exitState == null) {
-                                    exitState = automaton.addState(AcceptingOrExit.EXIT,
-                                            table.getCounterLimit() + 1);
-                                    for (I input : alphabet) {
-                                        automaton.setTransition(exitState, input, exitState);
-                                    }
-                                    idToState.put(-1, exitState);
+                            DefaultAutomatonWithCounterValuesState target = null;
+
+                            if (!idToState.containsKey(-1)
+                                    && (table.isExitRow(targetRow) || table.isExitRow(targetRepresentativeRow))) {
+                                // We construct the exit state
+                                DefaultAutomatonWithCounterValuesState exitState = automaton
+                                        .addState(AcceptingOrExit.EXIT, table.getCounterLimit() + 1);
+                                for (I input : alphabet) {
+                                    automaton.setTransition(exitState, input, exitState);
                                 }
+                                idToState.put(-1, exitState);
                                 target = exitState;
-                            } else {
+                            } else if (!table.isBinRow(targetRepresentativeRow)) {
                                 target = idToState.get(targetRepresentativeRow.getRowId());
                             }
 
-                            automaton.setTransition(start, alphabet.getSymbol(i), target);
+                            if (target != null) {
+                                automaton.setTransition(start, alphabet.getSymbol(i), target);
+                            }
                         }
                     }
                 }
