@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 import com.github.misberner.buildergen.annotations.GenerateBuilder;
 import de.learnlib.acex.AcexAnalyzer;
@@ -41,6 +42,8 @@ import net.automatalib.commons.smartcollections.ArrayStorage;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
 import net.automatalib.words.impl.Alphabets;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The Kearns/Vazirani algorithm for learning DFA, as described in the book "An Introduction to Computational Learning
@@ -53,6 +56,8 @@ import net.automatalib.words.impl.Alphabets;
  */
 public class KearnsVaziraniDFA<I>
         implements DFALearner<I>, SupportsGrowingAlphabet<I>, Resumable<KearnsVaziraniDFAState<I>> {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(KearnsVaziraniDFA.class);
 
     private final Alphabet<I> alphabet;
     private final MembershipOracle<I, Boolean> oracle;
@@ -320,7 +325,11 @@ public class KearnsVaziraniDFA<I>
                 setTransition(stateIter.next().id, inputIdx, leafsIter.next());
             }
 
-            assert !stateIter.hasNext();
+            // in case the new symbol added a new state (see sift method) we allow at max one additional state
+            assert !stateIter.hasNext() || !((BooleanSupplier) () -> {
+                stateIter.next();
+                return stateIter.hasNext();
+            }).getAsBoolean();
             assert !leafsIter.hasNext();
         }
     }
@@ -336,6 +345,14 @@ public class KearnsVaziraniDFA<I>
         this.discriminationTree = state.getDiscriminationTree();
         this.discriminationTree.setOracle(oracle);
         this.stateInfos = state.getStateInfos();
+
+        final Alphabet<I> oldAlphabet = this.hypothesis.getInputAlphabet();
+        if (!oldAlphabet.equals(this.alphabet)) {
+            LOGGER.warn(
+                    "The current alphabet '{}' differs from the resumed alphabet '{}'. Future behavior may be inconsistent",
+                    this.alphabet,
+                    oldAlphabet);
+        }
     }
 
     public static final class BuilderDefaults {
