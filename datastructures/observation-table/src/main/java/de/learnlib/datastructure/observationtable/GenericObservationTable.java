@@ -60,17 +60,17 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *
  * @author Malte Isberner
  */
-public class GenericObservationTable<I, D> implements MutableObservationTable<I, D> {
+public final class GenericObservationTable<I, D> implements MutableObservationTable<I, D> {
 
-    protected static final int NO_ENTRY = -1;
+    private static final int NO_ENTRY = -1;
     private final List<RowImpl<I>> shortPrefixRows = new ArrayList<>();
     // private static final int NO_ENTRY = -1;
     private final List<RowImpl<I>> longPrefixRows = new ArrayList<>();
     private final List<RowImpl<I>> allRows = new ArrayList<>();
-    protected final List<List<D>> allRowContents = new ArrayList<>();
-    protected final List<@Nullable RowImpl<I>> canonicalRows = new ArrayList<>();
+    private final List<List<D>> allRowContents = new ArrayList<>();
+    private final List<@Nullable RowImpl<I>> canonicalRows = new ArrayList<>();
     // private final TObjectIntMap<List<D>> rowContentIds = new TObjectIntHashMap<>(10, 0.75f, NO_ENTRY);
-    protected final Map<List<D>, Integer> rowContentIds = new HashMap<>(); // TODO: replace with primitive specialization
+    private final Map<List<D>, Integer> rowContentIds = new HashMap<>(); // TODO: replace with primitive specialization
     private final Map<Word<I>, RowImpl<I>> rowMap = new HashMap<>();
     private final List<Word<I>> suffixes = new ArrayList<>();
     private final Set<Word<I>> suffixSet = new HashSet<>();
@@ -90,7 +90,7 @@ public class GenericObservationTable<I, D> implements MutableObservationTable<I,
         this.alphabetSize = alphabet.size();
     }
 
-    protected static <I, D> void buildQueries(List<DefaultQuery<I, D>> queryList,
+    private static <I, D> void buildQueries(List<DefaultQuery<I, D>> queryList,
                                             Word<I> prefix,
                                             List<? extends Word<I>> suffixes) {
         for (Word<I> suffix : suffixes) {
@@ -226,14 +226,14 @@ public class GenericObservationTable<I, D> implements MutableObservationTable<I,
      * @param numSuffixes
      *         the number of suffixes (queries)
      */
-    protected static <I, D> void fetchResults(Iterator<DefaultQuery<I, D>> queryIt, List<D> output, int numSuffixes) {
+    private static <I, D> void fetchResults(Iterator<DefaultQuery<I, D>> queryIt, List<D> output, int numSuffixes) {
         for (int j = 0; j < numSuffixes; j++) {
             DefaultQuery<I, D> qry = queryIt.next();
             output.add(qry.getOutput());
         }
     }
 
-    protected boolean processContents(RowImpl<I> row, List<D> rowContents, boolean makeCanonical) {
+    private boolean processContents(RowImpl<I> row, List<D> rowContents, boolean makeCanonical) {
         int contentId;
         boolean added = false;
         contentId = rowContentIds.getOrDefault(rowContents, NO_ENTRY);
