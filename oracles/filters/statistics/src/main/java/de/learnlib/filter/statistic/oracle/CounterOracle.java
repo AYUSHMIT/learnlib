@@ -21,6 +21,7 @@ import java.util.Collection;
 import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.oracle.MembershipOracle.DFAMembershipOracle;
 import de.learnlib.api.oracle.MembershipOracle.MealyMembershipOracle;
+import de.learnlib.api.oracle.MembershipOracle.CounterValueOracle;
 import de.learnlib.api.query.Query;
 import de.learnlib.api.statistic.StatisticOracle;
 import de.learnlib.buildtool.refinement.annotation.GenerateRefinement;
@@ -49,6 +50,13 @@ import net.automatalib.words.Word;
                                             to = MealyMembershipOracle.class,
                                             withGenerics = {"I", "O"}),
                     interfaces = @Interface(clazz = MealyMembershipOracle.class, generics = {"I", "O"}))
+@GenerateRefinement(name = "CounterValueCounterOracle",
+                    generics = "I",
+                    parentGenerics = {@Generic("I"), @Generic(clazz = Integer.class)},
+                    parameterMapping = @Map(from = MembershipOracle.class,
+                                            to = CounterValueOracle.class,
+                                            withGenerics = "I"),
+                    interfaces = @Interface(clazz = CounterValueOracle.class, generics = "I"))
 public class CounterOracle<I, D> implements StatisticOracle<I, D> {
 
     private final Counter counter;
