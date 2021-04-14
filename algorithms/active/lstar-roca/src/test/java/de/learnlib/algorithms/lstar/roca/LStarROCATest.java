@@ -10,6 +10,7 @@ import de.learnlib.examples.dfa.ExamplePaulAndMary;
 import de.learnlib.examples.roca.ExampleTinyROCA;
 import de.learnlib.oracle.equivalence.roca.ROCASimulatorEQOracle;
 import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonSimulatorEQOracle;
+import de.learnlib.oracle.membership.roca.CounterValueOracle;
 import de.learnlib.oracle.membership.roca.RestrictedAutomatonSimulatorOracle;
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.oca.ROCA;
@@ -20,16 +21,17 @@ import net.automatalib.words.impl.Symbol;
 public class LStarROCATest {
     private <I> void launch(ROCA<?, I> roca, Alphabet<I> alphabet) {
         RestrictedAutomatonMembershipOracle<I> mOracle = new RestrictedAutomatonSimulatorOracle<>(roca);
+        CounterValueOracle<I> counterValueOracle = new CounterValueOracle<>(roca);
         ROCAEquivalenceOracle<I> rocaEqOracle = new ROCASimulatorEQOracle<>(roca);
         RestrictedAutomatonEquivalenceOracle<I> restrictedEqOracle = new RestrictedAutomatonSimulatorEQOracle<>(roca,
                 alphabet);
 
-        LearningAlgorithm.ROCALearner<I> learner = new LStarROCA<>(mOracle, restrictedEqOracle, alphabet);
+        LearningAlgorithm.ROCALearner<I> learner = new LStarROCA<>(mOracle, counterValueOracle, restrictedEqOracle, alphabet);
 
         LearningTest.testLearnROCA(roca, alphabet, learner, rocaEqOracle);
     }
 
-    @Test
+    @Test(timeOut = 1000)
     public void testLearningRegularLanguage() {
         ExamplePaulAndMary example = ExamplePaulAndMary.createExample();
         Alphabet<Symbol> alphabet = example.getAlphabet();
@@ -39,7 +41,7 @@ public class LStarROCATest {
         launch(roca, alphabet);
     }
 
-    @Test
+    @Test(timeOut = 1000)
     public void testLearningTinyROCA() {
         Alphabet<Character> alphabet = ExampleTinyROCA.getAlphabet();
         ROCA<?, Character> roca = ExampleTinyROCA.constructMachine();

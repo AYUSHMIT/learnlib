@@ -15,13 +15,12 @@
  */
 package de.learnlib.api.algorithm;
 
-import java.util.Iterator;
+import java.util.Collection;
 
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.query.DefaultQuery;
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.oca.ROCA;
-import net.automatalib.automata.oca.automatoncountervalues.AcceptingOrExit;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.words.Word;
 
@@ -88,7 +87,7 @@ public interface LearningAlgorithm<M, I, D> {
      * Thus, the experiment must ask multiple equivalence queries (one by possible ROCA).
      * @author Gaëtan Staquet
      */
-    interface ROCALearner<I> extends LearningAlgorithm<ROCA<?, I>, I, AcceptingOrExit> {
+    interface ROCALearner<I> extends LearningAlgorithm<ROCA<?, I>, I, Boolean> {
         /**
          * As an ROCA learner can construct multiple ROCAs each iteration, this function should not be called.
          * 
@@ -96,16 +95,16 @@ public interface LearningAlgorithm<M, I, D> {
          */
         @Override
         default ROCA<?, I> getHypothesisModel() {
-            throw new UnsupportedOperationException("Since LStar for ROCA can construct multiple ROCAs in a round, please use getHypothesisModels()");
+            throw new UnsupportedOperationException("Since a learning algorithm for ROCA can construct multiple ROCAs in a round, please use getHypothesisModels()");
         }
 
         /**
          * Gets every ROCA that can be constructed from the current knowledge such that the ROCAs are consistent with the knowledge.
          * 
-         * In other words, it is guaranteed that the ROCA and the learner's knowledge agree on the representatives.
+         * In other words, it is guaranteed that the ROCAs and the learner's knowledge agree on the acceptance of the words known by the learner.
          * @return An iterator over ROCAs
          */
-        Iterator<ROCA<?, I>> getHypothesisModels();
+        Collection<ROCA<?, I>> getHypothesisModels();
 
         /**
          * Gets the learnt DFA (the restricted automaton up to a counter value) as an ROCA.
