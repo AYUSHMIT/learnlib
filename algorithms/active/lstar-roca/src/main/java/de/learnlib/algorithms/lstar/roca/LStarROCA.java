@@ -21,8 +21,6 @@ import de.learnlib.datastructure.observationtable.GenericObservationTableWithCou
 import de.learnlib.util.MQUtil;
 import de.learnlib.api.algorithm.feature.GlobalSuffixLearner;
 import net.automatalib.SupportsGrowingAlphabet;
-import net.automatalib.automata.fsa.DFA;
-import net.automatalib.automata.fsa.impl.compact.CompactDFA;
 import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.oca.automatoncountervalues.AutomatonWithCounterValues;
 import net.automatalib.automata.oca.automatoncountervalues.DefaultAutomatonWithCounterValues;
@@ -178,7 +176,7 @@ public final class LStarROCA<I>
      */
     private void learnDFA() {
         while (true) {
-            final DFA<?, I> hypothesis = constructDFAHypothesis();
+            updateHypothesis();
             DefaultQuery<I, Boolean> ce = restrictedAutomatonEquivalenceOracle.findCounterExample(hypothesis, alphabet);
 
             if (ce == null) {
@@ -194,46 +192,6 @@ public final class LStarROCA<I>
             completeConsistentTable(unclosed, true);
             assert table.numberOfDistinctRows() > oldDistinctRows;
         }
-    }
-
-    private DFA<?, I> constructDFAHypothesis() {
-        Set<Row<I>> representativeRows = table.getRepresentativeRows();
-
-        CompactDFA<I> dfa = new CompactDFA<>(alphabet);
-
-        // We create the states of the DFA
-        Map<Integer, Integer> idToState = new HashMap<>();
-        for (Row<I> row : representativeRows) {
-            boolean initial = row.getLabel() == Word.epsilon();
-            boolean accepting = table.fullCellContents(row, 0).getOutput();
-            Integer state;
-            if (initial) {
-                state = dfa.addInitialState(accepting);
-            } else {
-                state = dfa.addState(accepting);
-            }
-
-            idToState.put(row.getRowId(), state);
-        }
-
-        // We create the transitions
-        for (Row<I> row : representativeRows) {
-            Integer start = idToState.get(row.getRowId());
-
-            for (int i = 0; i < alphabet.size(); i++) {
-                Row<I> targetRow = row.getSuccessor(i);
-                // If the transition leads to the exit state, we completely ignore it (so, it
-                // will lead to a bin state, as intended).
-                Row<I> targetRepresentative = table.getRepresentativeForEquivalenceClass(targetRow);
-                if (targetRepresentative != null) {
-                    Integer target = idToState.get(targetRepresentative.getRowId());
-                    dfa.setTransition(start, alphabet.getSymbol(i), target);
-                }
-
-            }
-        }
-
-        return dfa;
     }
 
     @Override
@@ -338,14 +296,13 @@ public final class LStarROCA<I>
             throw new IllegalStateException("Cannot update internal hypothesis: not initialized");
         }
 
-        DefaultAutomatonWithCounterValues<I> automaton = new DefaultAutomatonWithCounterValues<>(alphabet);
-
+        final DefaultAutomatonWithCounterValues<I> automaton = new DefaultAutomatonWithCounterValues<>(alphabet);
         final Set<Row<I>> representativeRows = table.getRepresentativeRows();
 
         Map<Integer, DefaultAutomatonWithCounterValuesState> idToState = new HashMap<>();
-        for (Row<I> representativeRow : representativeRows) {
-            boolean initial = representativeRow.getLabel() == Word.epsilon();
-            OutputAndCounterValue<Boolean> cellContents = table.fullCellContents(representativeRow, 0);
+        for (Row<I> row : representativeRows) {
+            boolean initial = row.getLabel() == Word.epsilon();
+            OutputAndCounterValue<Boolean> cellContents = table.fullCellContents(row, 0);
             boolean accepting = cellContents.getOutput();
             int counterValue = cellContents.getCounterValue();
 
@@ -356,20 +313,18 @@ public final class LStarROCA<I>
                 state = automaton.addState(accepting, counterValue);
             }
 
-            idToState.put(representativeRow.getRowId(), state);
+            idToState.put(row.getRowId(), state);
         }
 
-        for (Row<I> representativeRow : representativeRows) {
-            DefaultAutomatonWithCounterValuesState start = idToState.get(representativeRow.getRowId());
+        for (Row<I> row : representativeRows) {
+            DefaultAutomatonWithCounterValuesState start = idToState.get(row.getRowId());
             for (int i = 0; i < alphabet.size(); i++) {
-                Row<I> targetRow = representativeRow.getSuccessor(i);
-                if (targetRow != null) {
-                    Row<I> targetRepresentativeRow = table.getRepresentativeForEquivalenceClass(targetRow);
-                    if (targetRepresentativeRow != null) {
-                        DefaultAutomatonWithCounterValuesState target = idToState
-                                .get(targetRepresentativeRow.getRowId());
-                        automaton.setTransition(start, alphabet.getSymbol(i), target);
-                    }
+                Row<I> targetRow = row.getSuccessor(i);
+                Row<I> targetRepresentative = table.getRepresentativeForEquivalenceClass(targetRow);
+                if (targetRepresentative != null) {
+                    DefaultAutomatonWithCounterValuesState target = idToState
+                            .get(targetRepresentative.getRowId());
+                    automaton.setTransition(start, alphabet.getSymbol(i), target);
                 }
             }
         }

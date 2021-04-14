@@ -24,6 +24,7 @@ public class RestrictedAutomatonCounterOracle<I> extends CounterOracle<I, Boolea
 
     @Override
     public Boolean answerQuery(Word<I> prefix, Word<I> suffix) {
+        getCounter().increment();
         return nextOracle.answerQuery(prefix, suffix);
     }
 

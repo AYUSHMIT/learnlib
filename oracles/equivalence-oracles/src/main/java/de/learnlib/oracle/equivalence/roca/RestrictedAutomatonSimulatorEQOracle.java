@@ -45,7 +45,7 @@ public final class RestrictedAutomatonSimulatorEQOracle<I>
     @Override
     public void setCounterLimit(int counterLimit) {
         this.counterLimit = counterLimit;
-        reference = OCAUtil.constructRestrictedAutomaton(roca, counterLimit).toSimpleDFA();
+        reference = OCAUtil.constructRestrictedAutomaton(roca, counterLimit);
         reference = DFAs.complete(reference, alphabet);
     }
 
