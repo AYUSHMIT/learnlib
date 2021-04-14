@@ -102,8 +102,6 @@ public interface EquivalenceOracle<A, I, D> {
      * @author Gaëtan Staquet
      */
     interface RestrictedAutomatonEquivalenceOracle<I> extends EquivalenceOracle<DFA<?, I>, I, Boolean> {
-        public void incrementCounterLimit();
-
         public void setCounterLimit(int counterLimit);
         
         public int getCounterLimit();

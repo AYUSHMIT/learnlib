@@ -5,7 +5,6 @@ import java.security.InvalidParameterException;
 import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.oracle.SingleQueryOracle;
 import de.learnlib.filter.statistic.oracle.CounterOracle;
-import net.automatalib.automata.oca.automatoncountervalues.AcceptingOrExit;
 import net.automatalib.words.Word;
 
 /**
@@ -13,7 +12,7 @@ import net.automatalib.words.Word;
  * 
  * @author Gaëtan Staquet
  */
-public class RestrictedAutomatonCounterOracle<I> extends CounterOracle<I, AcceptingOrExit>
+public class RestrictedAutomatonCounterOracle<I> extends CounterOracle<I, Boolean>
         implements SingleQueryOracle.SingleQueryOracleRestrictedAutomaton<I> {
 
     private SingleQueryOracleRestrictedAutomaton<I> nextOracle;
@@ -24,13 +23,8 @@ public class RestrictedAutomatonCounterOracle<I> extends CounterOracle<I, Accept
     }
 
     @Override
-    public AcceptingOrExit answerQuery(Word<I> prefix, Word<I> suffix) {
+    public Boolean answerQuery(Word<I> prefix, Word<I> suffix) {
         return nextOracle.answerQuery(prefix, suffix);
-    }
-
-    @Override
-    public void incrementCounterLimit() {
-        nextOracle.incrementCounterLimit();
     }
 
     @Override
@@ -44,7 +38,7 @@ public class RestrictedAutomatonCounterOracle<I> extends CounterOracle<I, Accept
     }
 
     @Override
-    public void setNext(MembershipOracle<I, AcceptingOrExit> next) {
+    public void setNext(MembershipOracle<I, Boolean> next) {
         if (!SingleQueryOracleRestrictedAutomaton.class.isInstance(next)) {
             throw new InvalidParameterException("The oracle used for automata with counter values must implement SingleQueryOracleAutomatonWithCounterValues");
         }
@@ -53,7 +47,7 @@ public class RestrictedAutomatonCounterOracle<I> extends CounterOracle<I, Accept
     }
     
     @Override
-    protected MembershipOracle<I, AcceptingOrExit> getNextOracle() {
+    protected MembershipOracle<I, Boolean> getNextOracle() {
         return nextOracle;
     }
 }

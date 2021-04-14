@@ -2,7 +2,6 @@ package de.learnlib.oracle.membership.roca;
 
 import de.learnlib.api.oracle.SingleQueryOracle;
 import net.automatalib.automata.oca.ROCA;
-import net.automatalib.automata.oca.automatoncountervalues.AcceptingOrExit;
 import net.automatalib.automata.oca.automatoncountervalues.AutomatonWithCounterValues;
 import net.automatalib.util.automata.oca.OCAUtil;
 import net.automatalib.words.Word;
@@ -28,11 +27,6 @@ public final class RestrictedAutomatonSimulatorOracle<I> implements SingleQueryO
     }
 
     @Override
-    public void incrementCounterLimit() {
-        setCounterLimit(counterLimit + 1);
-    }
-
-    @Override
     public void setCounterLimit(int counterLimit) {
         this.counterLimit = counterLimit;
         reference = OCAUtil.constructRestrictedAutomaton(roca, counterLimit);
@@ -44,7 +38,7 @@ public final class RestrictedAutomatonSimulatorOracle<I> implements SingleQueryO
     }
 
     @Override
-    public AcceptingOrExit answerQuery(Word<I> prefix, Word<I> suffix) {
+    public Boolean answerQuery(Word<I> prefix, Word<I> suffix) {
         return reference.computeSuffixOutput(prefix, suffix);
     }
     

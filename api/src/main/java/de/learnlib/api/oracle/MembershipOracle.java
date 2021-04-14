@@ -21,7 +21,6 @@ import java.util.Collections;
 import de.learnlib.api.oracle.parallelism.BatchProcessor;
 import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.api.query.Query;
-import net.automatalib.automata.oca.automatoncountervalues.AcceptingOrExit;
 import net.automatalib.words.Word;
 
 /**
@@ -99,11 +98,23 @@ public interface MembershipOracle<I, D> extends QueryAnswerer<I, D>, BatchProces
      */
     interface MealyMembershipOracle<I, O> extends MembershipOracle<I, Word<O>> {}
 
-    interface RestrictedAutomatonMembershipOracle<I> extends MembershipOracle<I, AcceptingOrExit> {
-        public void incrementCounterLimit();
-
+    /**
+     * A specialization of the {@link MembershipOracle} for oracles that work with a counter limit.
+     * 
+     * @param <I>
+     *         input symbol type
+     */
+    interface RestrictedAutomatonMembershipOracle<I> extends MembershipOracle<I, Boolean> {
         public void setCounterLimit(int counterLimit);
         
         public int getCounterLimit();
     }
+
+    /**
+     * A specialization of the {@link MembershipOracle} that outputs an integer.
+     * 
+     * @param <I>
+     *         input symbol type
+     */
+    interface CounterValueOracle<I> extends MembershipOracle<I, Integer> {}
 }
