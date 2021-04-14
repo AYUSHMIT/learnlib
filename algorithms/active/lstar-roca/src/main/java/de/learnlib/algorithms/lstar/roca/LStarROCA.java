@@ -16,9 +16,8 @@ import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.datastructure.observationtable.Inconsistency;
 import de.learnlib.datastructure.observationtable.OTLearner;
-import de.learnlib.datastructure.observationtable.ObservationTableWithCounterValues;
 import de.learnlib.datastructure.observationtable.Row;
-import de.learnlib.datastructure.observationtable.ObservationTableWithCounterValues.OutputAndCounterValue;
+import de.learnlib.datastructure.observationtable.GenericObservationTableWithCounterValues.OutputAndCounterValue;
 import de.learnlib.util.MQUtil;
 import de.learnlib.api.algorithm.feature.GlobalSuffixLearner;
 import net.automatalib.SupportsGrowingAlphabet;
@@ -111,7 +110,7 @@ public final class LStarROCA<I>
         // That is, the ROCA and the table must agree on the acceptance of the words.
         for (Row<I> row : table.getAllRows()) {
             Word<I> prefix = row.getLabel();
-            List<OutputAndCounterValue> rowContent = table.fullRowContents(row);
+            List<OutputAndCounterValue<Boolean>> rowContent = table.fullRowContents(row);
             for (int i = 0; i < table.numberOfSuffixes(); i++) {
                 Word<I> word = prefix.concat(table.getSuffix(i));
                 if (roca.accepts(word) != rowContent.get(i).getOutput()) {
@@ -293,8 +292,8 @@ public final class LStarROCA<I>
         int numSuffixes = table.getSuffixes().size();
 
         for (int i = 0; i < numSuffixes; i++) {
-            OutputAndCounterValue val1 = table.fullCellContents(successorRow1, i);
-            OutputAndCounterValue val2 = table.fullCellContents(successorRow2, i);
+            OutputAndCounterValue<Boolean> val1 = table.fullCellContents(successorRow1, i);
+            OutputAndCounterValue<Boolean> val2 = table.fullCellContents(successorRow2, i);
             if (!Objects.equals(val1, val2)) {
                 I sym = alphabet.getSymbol(inputIdx);
                 Word<I> suffix = table.getSuffixes().get(i);
@@ -346,7 +345,7 @@ public final class LStarROCA<I>
         Map<Integer, DefaultAutomatonWithCounterValuesState> idToState = new HashMap<>();
         for (Row<I> representativeRow : representativeRows) {
             boolean initial = representativeRow.getLabel() == Word.epsilon();
-            OutputAndCounterValue cellContents = table.fullCellContents(representativeRow, 0);
+            OutputAndCounterValue<Boolean> cellContents = table.fullCellContents(representativeRow, 0);
             boolean accepting = cellContents.getOutput();
             int counterValue = cellContents.getCounterValue();
 

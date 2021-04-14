@@ -21,37 +21,34 @@ import net.automatalib.words.Word;
 import net.automatalib.words.impl.Alphabets;
 
 /**
- * An observation table storing pairs (acceptance, counter value).
- * 
- * The observation table encodes a restricted automaton, i.e., an
- * {@link AutomatonWithCounterValues} up to a counter limit.
+ * An abstract observation table storing pairs (acceptance, counter value).
  * 
  * This table needs a counter value oracle on top of the membership oracle.
  * 
- * The table does not store a short prefix for the bin row.
- * The definition of the bin row depends on the actual implementation.
- * 
- * TODO: add generics to this table and override isBinRow in a child
+ * The table does not store a short prefix for the bin row. The definition of
+ * the bin row depends on the actual implementation. See
+ * {@link ObservationTableWithCounterValues} for an implementation for
+ * {@link AutomatonWithCounterValues}.
  * 
  * @param <I> Input alphabet type
  * 
  * @author Gaëtan Staquet
  */
-public final class ObservationTableWithCounterValues<I> implements MutableObservationTable<I, Boolean> {
+public abstract class GenericObservationTableWithCounterValues<I, D> implements MutableObservationTable<I, D> {
 
     /**
      * Stores a pair (output, counter value).
      */
-    public static final class OutputAndCounterValue {
-        private final Boolean output;
+    public static final class OutputAndCounterValue<D> {
+        private final D output;
         private final Integer counterValue;
 
-        public OutputAndCounterValue(Boolean output, Integer counterValue) {
+        public OutputAndCounterValue(D output, Integer counterValue) {
             this.output = output;
             this.counterValue = counterValue;
         }
 
-        public Boolean getOutput() {
+        public D getOutput() {
             return output;
         }
 
@@ -83,23 +80,23 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
                 return false;
             }
 
-            OutputAndCounterValue o = (OutputAndCounterValue) obj;
+            OutputAndCounterValue<?> o = (OutputAndCounterValue<?>) obj;
 
             return Objects.equals(getOutput(), o.getOutput()) && Objects.equals(getCounterValue(), o.getCounterValue());
         }
     }
 
     private static final int NO_ENTRY = -1;
-    private static final int NO_COUNTER_VALUE = -1;
+    protected static final int NO_COUNTER_VALUE = -1;
 
     private final List<RowImpl<I>> shortPrefixRows = new ArrayList<>();
     private final List<RowImpl<I>> longPrefixRows = new ArrayList<>();
     private final List<RowImpl<I>> allRows = new ArrayList<>();
-    private final Map<Integer, List<OutputAndCounterValue>> allRowContents = new HashMap<>();
+    private final Map<Integer, List<OutputAndCounterValue<D>>> allRowContents = new HashMap<>();
     private final Map<Integer, List<Row<I>>> rowByContentId = new HashMap<>();
     private final List<@Nullable RowImpl<I>> canonicalRows = new ArrayList<>();
 
-    private final Map<List<OutputAndCounterValue>, Integer> rowContentIds = new HashMap<>();
+    private final Map<List<OutputAndCounterValue<D>>, Integer> rowContentIds = new HashMap<>();
     private final Map<Word<I>, RowImpl<I>> rowMap = new HashMap<>();
     private final List<Word<I>> suffixes = new ArrayList<>();
     private final Set<Word<I>> suffixSet = new HashSet<>();
@@ -114,7 +111,7 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
 
     private final MembershipOracle.CounterValueOracle<I> counterValueOracle;
 
-    public ObservationTableWithCounterValues(Alphabet<I> alphabet,
+    public GenericObservationTableWithCounterValues(Alphabet<I> alphabet,
             MembershipOracle.CounterValueOracle<I> counterValueOracle) {
         this.alphabet = alphabet;
         alphabetSize = alphabet.size();
@@ -147,17 +144,21 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
         return true;
     }
 
-    private static <I> void fetchResults(Iterator<DefaultQuery<I, Boolean>> queryIt, List<OutputAndCounterValue> output,
+    private static <I, D> void fetchResults(Iterator<DefaultQuery<I, D>> queryIt, List<OutputAndCounterValue<D>> output,
             int numSuffixes) {
         for (int j = 0; j < numSuffixes; j++) {
-            DefaultQuery<I, Boolean> query = queryIt.next();
-            output.add(new OutputAndCounterValue(query.getOutput(), null));
+            DefaultQuery<I, D> query = queryIt.next();
+            output.add(new OutputAndCounterValue<>(query.getOutput(), null));
         }
     }
 
+    protected abstract boolean isBinRow(Row<I> row);
+
+    protected abstract boolean isAccepted(OutputAndCounterValue<D> outputAndCounterValue);
+
     @Override
     public List<List<Row<I>>> initialize(List<Word<I>> initialShortPrefixes, List<Word<I>> initialSuffixes,
-            MembershipOracle<I, Boolean> oracle) {
+            MembershipOracle<I, D> oracle) {
         if (!allRows.isEmpty()) {
             throw new IllegalStateException("Called initialize, but there are already rows present");
         }
@@ -182,7 +183,7 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
         // To fill the table, we need two passes: one for the membership queries, and
         // one for the counter values
         // PASS 1: Memberships
-        List<DefaultQuery<I, Boolean>> queries = new ArrayList<>(numPrefixes * numSuffixes);
+        List<DefaultQuery<I, D>> queries = new ArrayList<>(numPrefixes * numSuffixes);
 
         // PASS 1.1: Add short prefix rows
         for (Word<I> sp : initialShortPrefixes) {
@@ -207,10 +208,10 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
 
         oracle.processQueries(queries);
 
-        Iterator<DefaultQuery<I, Boolean>> queryIt = queries.iterator();
+        Iterator<DefaultQuery<I, D>> queryIt = queries.iterator();
 
         for (RowImpl<I> spRow : shortPrefixRows) {
-            List<OutputAndCounterValue> rowContents = new ArrayList<>(numSuffixes);
+            List<OutputAndCounterValue<D>> rowContents = new ArrayList<>(numSuffixes);
             fetchResults(queryIt, rowContents, numSuffixes);
             if (!processContents(spRow, rowContents, true)) {
                 initialConsistencyCheckRequired = true;
@@ -223,7 +224,7 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
                 if (successorRow.isShortPrefixRow()) {
                     continue;
                 }
-                List<OutputAndCounterValue> rowContents = new ArrayList<>(numSuffixes);
+                List<OutputAndCounterValue<D>> rowContents = new ArrayList<>(numSuffixes);
                 fetchResults(queryIt, rowContents, numSuffixes);
                 processContents(successorRow, rowContents, false);
             }
@@ -233,15 +234,15 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
         // We only ask counter values queries on words that are in the prefixes of L,
         // according to the table.
         for (RowImpl<I> spRow : shortPrefixRows) {
-            List<OutputAndCounterValue> newRowContents = new ArrayList<>(fullRowContents(spRow));
+            List<OutputAndCounterValue<D>> newRowContents = new ArrayList<>(fullRowContents(spRow));
             for (int i = 0; i < numSuffixes; i++) {
                 Word<I> word = spRow.getLabel().concat(suffixes.get(i));
-                boolean output = newRowContents.get(i).getOutput();
+                D output = newRowContents.get(i).getOutput();
                 int counterValue = NO_COUNTER_VALUE;
                 if (prefixesOfL.contains(word)) {
                     counterValue = counterValueOracle.answerQuery(word);
                 }
-                OutputAndCounterValue newCellContent = new OutputAndCounterValue(output, counterValue);
+                OutputAndCounterValue<D> newCellContent = new OutputAndCounterValue<>(output, counterValue);
                 newRowContents.set(i, newCellContent);
             }
             if (!processContents(spRow, newRowContents, true)) {
@@ -254,15 +255,15 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
         List<List<Row<I>>> unclosed = new ArrayList<>();
 
         for (RowImpl<I> lpRow : longPrefixRows) {
-            List<OutputAndCounterValue> newRowContents = new ArrayList<>(fullRowContents(lpRow));
+            List<OutputAndCounterValue<D>> newRowContents = new ArrayList<>(fullRowContents(lpRow));
             for (int i = 0; i < numSuffixes; i++) {
                 Word<I> word = lpRow.getLabel().concat(suffixes.get(i));
-                boolean output = newRowContents.get(i).getOutput();
+                D output = newRowContents.get(i).getOutput();
                 int counterValue = NO_COUNTER_VALUE;
                 if (prefixesOfL.contains(word)) {
                     counterValue = counterValueOracle.answerQuery(word);
                 }
-                OutputAndCounterValue newCellContent = new OutputAndCounterValue(output, counterValue);
+                OutputAndCounterValue<D> newCellContent = new OutputAndCounterValue<>(output, counterValue);
                 newRowContents.set(i, newCellContent);
             }
             // We do not want a representative for the bin row
@@ -302,7 +303,7 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
         return newRow;
     }
 
-    private boolean processContents(RowImpl<I> row, List<OutputAndCounterValue> rowContents, boolean makeCanonical) {
+    private boolean processContents(RowImpl<I> row, List<OutputAndCounterValue<D>> rowContents, boolean makeCanonical) {
         int contentId;
         boolean added = false;
         contentId = rowContentIds.getOrDefault(rowContents, NO_ENTRY);
@@ -332,7 +333,7 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
 
         // We update the set of prefixes of L, according to the table
         for (int i = 0; i < numberOfSuffixes(); i++) {
-            if (rowContents.get(i).getOutput()) {
+            if (isAccepted(rowContents.get(i))) {
                 Word<I> word = row.getLabel().concat(suffixes.get(i));
                 for (Word<I> prefix : word.prefixes(false)) {
                     prefixesOfL.add(prefix);
@@ -367,17 +368,6 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
         }
 
         return rowByContentId.get(row.getRowContentId()).get(0);
-    }
-
-    private boolean isBinRow(Row<I> row) {
-        List<OutputAndCounterValue> rowContents = fullRowContents(row);
-        for (int i = 0; i < numberOfSuffixes(); i++) {
-            OutputAndCounterValue cell = rowContents.get(i);
-            if (cell.getOutput() || cell.getCounterValue() != NO_COUNTER_VALUE) {
-                return false;
-            }
-        }
-        return true;
     }
 
     /**
@@ -428,16 +418,18 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
     }
 
     @Override
-    public List<Boolean> rowContents(Row<I> row) {
-        List<OutputAndCounterValue> rowContents = fullRowContents(row);
+    public List<D> rowContents(Row<I> row) {
+        List<OutputAndCounterValue<D>> rowContents = fullRowContents(row);
+        // formatter:off
         return rowContents.stream().map(contents -> contents.getOutput()).collect(Collectors.toList());
+        // formatter:on
     }
 
-    public List<OutputAndCounterValue> fullRowContents(Row<I> row) {
+    public List<OutputAndCounterValue<D>> fullRowContents(Row<I> row) {
         return allRowContents.get(row.getRowContentId());
     }
 
-    public OutputAndCounterValue fullCellContents(Row<I> row, int columnId) {
+    public OutputAndCounterValue<D> fullCellContents(Row<I> row, int columnId) {
         return fullRowContents(row).get(columnId);
     }
 
@@ -451,16 +443,16 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
         List<Word<I>> suffixes = getSuffixes();
 
         for (RowImpl<I> row : shortPrefixRows) {
-            List<OutputAndCounterValue> rowContents = new ArrayList<>(fullRowContents(row));
+            List<OutputAndCounterValue<D>> rowContents = new ArrayList<>(fullRowContents(row));
             boolean changed = false;
             for (int i = 0; i < suffixes.size(); i++) {
-                OutputAndCounterValue cell = rowContents.get(i);
+                OutputAndCounterValue<D> cell = rowContents.get(i);
                 if (cell.getCounterValue() == NO_COUNTER_VALUE) {
                     Word<I> word = row.getLabel().concat(suffixes.get(i));
                     if (prefixesOfL.contains(word)) {
-                        boolean output = cell.getOutput();
+                        D output = cell.getOutput();
                         int counterValue = counterValueOracle.answerQuery(word);
-                        rowContents.set(i, new OutputAndCounterValue(output, counterValue));
+                        rowContents.set(i, new OutputAndCounterValue<>(output, counterValue));
                         changed = true;
                     }
                 }
@@ -474,16 +466,16 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
         int numSpRows = numberOfDistinctRows();
 
         for (RowImpl<I> row : longPrefixRows) {
-            List<OutputAndCounterValue> rowContents = new ArrayList<>(fullRowContents(row));
+            List<OutputAndCounterValue<D>> rowContents = new ArrayList<>(fullRowContents(row));
             boolean changed = false;
             for (int i = 0; i < suffixes.size(); i++) {
-                OutputAndCounterValue cell = rowContents.get(i);
+                OutputAndCounterValue<D> cell = rowContents.get(i);
                 Word<I> word = row.getLabel().concat(suffixes.get(i));
                 if (cell.getCounterValue() == null || cell.getCounterValue() == NO_COUNTER_VALUE) {
                     if (prefixesOfL.contains(word)) {
-                        boolean output = cell.getOutput();
+                        D output = cell.getOutput();
                         int counterValue = counterValueOracle.answerQuery(word);
-                        rowContents.set(i, new OutputAndCounterValue(output, counterValue));
+                        rowContents.set(i, new OutputAndCounterValue<>(output, counterValue));
                         changed = true;
                     }
                 }
@@ -506,8 +498,7 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
     }
 
     @Override
-    public List<List<Row<I>>> addSuffixes(Collection<? extends Word<I>> newSuffixes,
-            MembershipOracle<I, Boolean> oracle) {
+    public List<List<Row<I>>> addSuffixes(Collection<? extends Word<I>> newSuffixes, MembershipOracle<I, D> oracle) {
         // we need a stable iteration order, and only List guarantees this
         List<Word<I>> newSuffixList = new ArrayList<>();
         for (Word<I> suffix : newSuffixes) {
@@ -526,7 +517,7 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
         int rowCount = numSpRows + longPrefixRows.size();
 
         // PASS 1: membership queries
-        List<DefaultQuery<I, Boolean>> queries = new ArrayList<>(rowCount * numNewSuffixes);
+        List<DefaultQuery<I, D>> queries = new ArrayList<>(rowCount * numNewSuffixes);
 
         for (RowImpl<I> row : shortPrefixRows) {
             buildQueries(queries, row.getLabel(), newSuffixList);
@@ -538,17 +529,17 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
 
         oracle.processQueries(queries);
 
-        Iterator<DefaultQuery<I, Boolean>> queryIt = queries.iterator();
+        Iterator<DefaultQuery<I, D>> queryIt = queries.iterator();
         int oldSuffixCount = suffixes.size();
 
         for (RowImpl<I> row : shortPrefixRows) {
-            List<OutputAndCounterValue> rowContents = allRowContents.get(row.getRowContentId());
+            List<OutputAndCounterValue<D>> rowContents = allRowContents.get(row.getRowContentId());
             if (rowContents.size() == oldSuffixCount) {
                 rowContentIds.remove(rowContents);
                 fetchResults(queryIt, rowContents, numNewSuffixes);
                 rowContentIds.put(rowContents, row.getRowContentId());
             } else {
-                List<OutputAndCounterValue> newContents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
+                List<OutputAndCounterValue<D>> newContents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
                 newContents.addAll(rowContents.subList(0, oldSuffixCount));
                 fetchResults(queryIt, newContents, numNewSuffixes);
                 processContents(row, newContents, true);
@@ -558,13 +549,13 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
         numSpRows = numberOfDistinctRows();
 
         for (RowImpl<I> row : longPrefixRows) {
-            List<OutputAndCounterValue> rowContents = allRowContents.get(row.getRowContentId());
+            List<OutputAndCounterValue<D>> rowContents = allRowContents.get(row.getRowContentId());
             if (rowContents.size() == oldSuffixCount) {
                 rowContentIds.remove(rowContents);
                 fetchResults(queryIt, rowContents, numNewSuffixes);
                 rowContentIds.put(rowContents, row.getRowContentId());
             } else {
-                List<OutputAndCounterValue> newContents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
+                List<OutputAndCounterValue<D>> newContents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
                 newContents.addAll(rowContents.subList(0, oldSuffixCount));
                 fetchResults(queryIt, newContents, numNewSuffixes);
                 processContents(row, newContents, false);
@@ -573,16 +564,16 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
 
         // PASS 2: counter values queries
         for (RowImpl<I> row : shortPrefixRows) {
-            List<OutputAndCounterValue> contents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
+            List<OutputAndCounterValue<D>> contents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
             contents.addAll(fullRowContents(row));
             for (int i = 0; i < numNewSuffixes; i++) {
                 Word<I> word = row.getLabel().concat(newSuffixList.get(i));
-                boolean output = contents.get(oldSuffixCount + i).getOutput();
+                D output = contents.get(oldSuffixCount + i).getOutput();
                 int counterValue = NO_COUNTER_VALUE;
                 if (prefixesOfL.contains(word)) {
                     counterValue = counterValueOracle.answerQuery(word);
                 }
-                contents.set(oldSuffixCount + i, new OutputAndCounterValue(output, counterValue));
+                contents.set(oldSuffixCount + i, new OutputAndCounterValue<>(output, counterValue));
             }
 
             processContents(row, contents, true);
@@ -590,16 +581,16 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
 
         Map<Integer, List<Row<I>>> unclosed = new HashMap<>();
         for (RowImpl<I> row : longPrefixRows) {
-            List<OutputAndCounterValue> contents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
+            List<OutputAndCounterValue<D>> contents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
             contents.addAll(fullRowContents(row));
             for (int i = 0; i < numNewSuffixes; i++) {
                 Word<I> word = row.getLabel().concat(newSuffixList.get(i));
-                boolean output = contents.get(oldSuffixCount + i).getOutput();
+                D output = contents.get(oldSuffixCount + i).getOutput();
                 int counterValue = NO_COUNTER_VALUE;
                 if (prefixesOfL.contains(word)) {
                     counterValue = counterValueOracle.answerQuery(word);
                 }
-                contents.set(oldSuffixCount + i, new OutputAndCounterValue(output, counterValue));
+                contents.set(oldSuffixCount + i, new OutputAndCounterValue<>(output, counterValue));
             }
 
             processContents(row, contents, false);
@@ -621,8 +612,7 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
     }
 
     @Override
-    public List<List<Row<I>>> addShortPrefixes(List<? extends Word<I>> shortPrefixes,
-            MembershipOracle<I, Boolean> oracle) {
+    public List<List<Row<I>>> addShortPrefixes(List<? extends Word<I>> shortPrefixes, MembershipOracle<I, D> oracle) {
         List<Row<I>> newShortPrefixes = new ArrayList<>();
 
         for (Word<I> sp : shortPrefixes) {
@@ -641,7 +631,7 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
     }
 
     @Override
-    public List<List<Row<I>>> toShortPrefixes(List<Row<I>> lpRows, MembershipOracle<I, Boolean> oracle) {
+    public List<List<Row<I>>> toShortPrefixes(List<Row<I>> lpRows, MembershipOracle<I, D> oracle) {
         List<RowImpl<I>> freshSpRows = new ArrayList<>();
         List<RowImpl<I>> freshLpRows = new ArrayList<>();
 
@@ -677,37 +667,37 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
 
         // PASS 1: membership queries
         int numFreshRows = freshSpRows.size() + freshLpRows.size();
-        List<DefaultQuery<I, Boolean>> queries = new ArrayList<>(numFreshRows * numSuffixes);
+        List<DefaultQuery<I, D>> queries = new ArrayList<>(numFreshRows * numSuffixes);
         buildRowQueries(queries, freshSpRows, suffixes);
         buildRowQueries(queries, freshLpRows, suffixes);
 
         oracle.processQueries(queries);
-        Iterator<DefaultQuery<I, Boolean>> queryIt = queries.iterator();
+        Iterator<DefaultQuery<I, D>> queryIt = queries.iterator();
 
         for (RowImpl<I> row : freshSpRows) {
-            List<OutputAndCounterValue> contents = new ArrayList<>(numSuffixes);
+            List<OutputAndCounterValue<D>> contents = new ArrayList<>(numSuffixes);
             fetchResults(queryIt, contents, numSuffixes);
             processContents(row, contents, true);
         }
 
         for (RowImpl<I> row : freshLpRows) {
-            List<OutputAndCounterValue> contents = new ArrayList<>(numSuffixes);
+            List<OutputAndCounterValue<D>> contents = new ArrayList<>(numSuffixes);
             fetchResults(queryIt, contents, numSuffixes);
             processContents(row, contents, false);
         }
 
         // PASS 2: counter value queries
         for (RowImpl<I> row : freshSpRows) {
-            List<OutputAndCounterValue> contents = new ArrayList<>(fullRowContents(row));
+            List<OutputAndCounterValue<D>> contents = new ArrayList<>(fullRowContents(row));
             for (int i = 0; i < numSuffixes; i++) {
                 Word<I> word = row.getLabel().concat(suffixes.get(i));
-                OutputAndCounterValue cell = contents.get(i);
-                boolean output = cell.getOutput();
+                OutputAndCounterValue<D> cell = contents.get(i);
+                D output = cell.getOutput();
                 int counterValue = NO_COUNTER_VALUE;
                 if (prefixesOfL.contains(word)) {
                     counterValue = counterValueOracle.answerQuery(word);
                 }
-                OutputAndCounterValue newCell = new OutputAndCounterValue(output, counterValue);
+                OutputAndCounterValue<D> newCell = new OutputAndCounterValue<>(output, counterValue);
                 contents.set(i, newCell);
             }
 
@@ -718,16 +708,16 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
         Map<Integer, List<Row<I>>> unclosed = new HashMap<>();
 
         for (RowImpl<I> row : freshLpRows) {
-            List<OutputAndCounterValue> contents = new ArrayList<>(fullRowContents(row));
+            List<OutputAndCounterValue<D>> contents = new ArrayList<>(fullRowContents(row));
             for (int i = 0; i < numSuffixes; i++) {
                 Word<I> word = row.getLabel().concat(suffixes.get(i));
-                OutputAndCounterValue cell = contents.get(i);
-                boolean output = cell.getOutput();
+                OutputAndCounterValue<D> cell = contents.get(i);
+                D output = cell.getOutput();
                 int counterValue = NO_COUNTER_VALUE;
                 if (prefixesOfL.contains(word)) {
                     counterValue = counterValueOracle.answerQuery(word);
                 }
-                OutputAndCounterValue newCell = new OutputAndCounterValue(output, counterValue);
+                OutputAndCounterValue<D> newCell = new OutputAndCounterValue<>(output, counterValue);
                 contents.set(i, newCell);
             }
 
@@ -772,17 +762,17 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
         }
     }
 
-    public List<List<Row<I>>> increaseCounterLimit(MembershipOracle<I, Boolean> oracle) {
+    public List<List<Row<I>>> increaseCounterLimit(MembershipOracle<I, D> oracle) {
         List<Word<I>> suffixes = getSuffixes();
         for (RowImpl<I> row : shortPrefixRows) {
-            List<OutputAndCounterValue> rowContents = new ArrayList<>(fullRowContents(row));
+            List<OutputAndCounterValue<D>> rowContents = new ArrayList<>(fullRowContents(row));
             for (int i = 0; i < suffixes.size(); i++) {
                 if (rowContents.get(i).getCounterValue() == NO_COUNTER_VALUE) {
                     Word<I> word = row.getLabel().concat(suffixes.get(i));
                     if (prefixesOfL.contains(word)) {
-                        boolean output = oracle.answerQuery(word);
+                        D output = oracle.answerQuery(word);
                         int counterValue = counterValueOracle.answerQuery(word);
-                        rowContents.set(i, new OutputAndCounterValue(output, counterValue));
+                        rowContents.set(i, new OutputAndCounterValue<>(output, counterValue));
                     }
                 }
             }
@@ -794,14 +784,14 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
         int numSpRows = numberOfDistinctRows();
 
         for (RowImpl<I> row : longPrefixRows) {
-            List<OutputAndCounterValue> rowContents = new ArrayList<>(fullRowContents(row));
+            List<OutputAndCounterValue<D>> rowContents = new ArrayList<>(fullRowContents(row));
             for (int i = 0; i < suffixes.size(); i++) {
                 if (rowContents.get(i).getCounterValue() == NO_COUNTER_VALUE) {
                     Word<I> word = row.getLabel().concat(suffixes.get(i));
                     if (prefixesOfL.contains(word)) {
-                        boolean output = oracle.answerQuery(word);
+                        D output = oracle.answerQuery(word);
                         int counterValue = counterValueOracle.answerQuery(word);
-                        rowContents.set(i, new OutputAndCounterValue(output, counterValue));
+                        rowContents.set(i, new OutputAndCounterValue<>(output, counterValue));
                     }
                 }
             }
@@ -850,7 +840,7 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
     }
 
     @Override
-    public List<List<Row<I>>> addAlphabetSymbol(I symbol, MembershipOracle<I, Boolean> oracle) {
+    public List<List<Row<I>>> addAlphabetSymbol(I symbol, MembershipOracle<I, D> oracle) {
         if (!alphabet.containsSymbol(symbol)) {
             Alphabets.toGrowingAlphabetOrThrowException(alphabet).addSymbol(symbol);
         }
@@ -879,15 +869,15 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
             final int numSuffixes = suffixes.size();
 
             // PASS 1: membership queries
-            final List<DefaultQuery<I, Boolean>> queries = new ArrayList<>(numLongPrefixes * numSuffixes);
+            final List<DefaultQuery<I, D>> queries = new ArrayList<>(numLongPrefixes * numSuffixes);
 
             buildRowQueries(queries, newLongPrefixes, suffixes);
             oracle.processQueries(queries);
 
-            final Iterator<DefaultQuery<I, Boolean>> queryIterator = queries.iterator();
+            final Iterator<DefaultQuery<I, D>> queryIterator = queries.iterator();
 
             for (RowImpl<I> row : newLongPrefixes) {
-                final List<OutputAndCounterValue> contents = new ArrayList<>(numSuffixes);
+                final List<OutputAndCounterValue<D>> contents = new ArrayList<>(numSuffixes);
 
                 fetchResults(queryIterator, contents, numSuffixes);
 
@@ -898,15 +888,15 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
             final Map<Integer, List<Row<I>>> unclosed = new HashMap<>();
             final int numSpRows = numberOfDistinctRows();
             for (RowImpl<I> row : newLongPrefixes) {
-                final List<OutputAndCounterValue> contents = new ArrayList<>(fullRowContents(row));
+                final List<OutputAndCounterValue<D>> contents = new ArrayList<>(fullRowContents(row));
                 for (int i = 0; i < numSuffixes; i++) {
                     Word<I> word = row.getLabel().concat(suffixes.get(i));
-                    boolean output = contents.get(i).getOutput();
+                    D output = contents.get(i).getOutput();
                     int counterValue = NO_COUNTER_VALUE;
                     if (prefixesOfL.contains(word)) {
                         counterValue = counterValueOracle.answerQuery(word);
                     }
-                    contents.set(i, new OutputAndCounterValue(output, counterValue));
+                    contents.set(i, new OutputAndCounterValue<>(output, counterValue));
                 }
 
                 processContents(row, contents, false);
@@ -937,12 +927,12 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
      * 
      * @return
      */
-    public ObservationTable<I, OutputAndCounterValue> toClassicObservationTable() {
-        class Table implements ObservationTable<I, OutputAndCounterValue> {
+    public ObservationTable<I, OutputAndCounterValue<D>> toClassicObservationTable() {
+        class Table implements ObservationTable<I, OutputAndCounterValue<D>> {
 
-            private final ObservationTableWithCounterValues<I> table;
+            private final GenericObservationTableWithCounterValues<I, D> table;
 
-            public Table(ObservationTableWithCounterValues<I> table) {
+            public Table(GenericObservationTableWithCounterValues<I, D> table) {
                 this.table = table;
             }
 
@@ -982,7 +972,7 @@ public final class ObservationTableWithCounterValues<I> implements MutableObserv
             }
 
             @Override
-            public List<OutputAndCounterValue> rowContents(Row<I> row) {
+            public List<OutputAndCounterValue<D>> rowContents(Row<I> row) {
                 return table.fullRowContents(row);
             }
 
