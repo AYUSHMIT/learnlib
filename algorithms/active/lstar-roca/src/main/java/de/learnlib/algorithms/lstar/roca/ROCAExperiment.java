@@ -1,6 +1,6 @@
 package de.learnlib.algorithms.lstar.roca;
 
-import java.util.Iterator;
+import java.util.Collection;
 
 import de.learnlib.api.algorithm.LearningAlgorithm;
 import de.learnlib.api.logging.LearnLogger;
@@ -9,7 +9,6 @@ import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.filter.statistic.Counter;
 import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.automata.oca.ROCA;
-import net.automatalib.automata.oca.automatoncountervalues.AcceptingOrExit;
 import net.automatalib.words.Alphabet;
 
 /**
@@ -99,12 +98,11 @@ public final class ROCAExperiment<I> {
         profileStop(LEARNING_ROCA_PROFILE_KEY);
 
         while (true) {
-            final Iterator<ROCA<?, I>> hypotheses = learningAlgorithm.getHypothesisModels();
+            final Collection<ROCA<?, I>> hypotheses = learningAlgorithm.getHypothesisModels();
 
             LOGGER.logPhase("Searching for counterexample");
             DefaultQuery<I, Boolean> counterexample = null;
-            while (hypotheses.hasNext()) {
-                ROCA<?, I> hypothesis = hypotheses.next();
+            for (ROCA<?, I> hypothesis : hypotheses) {
                 if (logModels) {
                     LOGGER.logModel(hypothesis);
                 }
@@ -116,7 +114,9 @@ public final class ROCAExperiment<I> {
                 if (ce == null) {
                     return hypothesis;
                 }
-                counterexample = ce;
+                else if (!hypothesis.accepts(ce.getInput())) {
+                    counterexample = ce;
+                }
             }
 
             if (counterexample == null) {
@@ -148,23 +148,11 @@ public final class ROCAExperiment<I> {
             LOGGER.logPhase("Starting round " + rounds.getCount());
             LOGGER.logPhase("Learning");
 
-            // We convert the Boolean to AcceptingOrExit
-            AcceptingOrExit acceptance = booleanToAcceptingOrExit(counterexample.getOutput());
-            DefaultQuery<I, AcceptingOrExit> ce = new DefaultQuery<>(counterexample.getPrefix(), counterexample.getSuffix(), acceptance);
-
             profileStart(LEARNING_ROCA_PROFILE_KEY);
-            final boolean refined = learningAlgorithm.refineHypothesis(ce);
+            final boolean refined = learningAlgorithm.refineHypothesis(counterexample);
             profileStop(LEARNING_ROCA_PROFILE_KEY);
 
             assert refined;
-        }
-    }
-
-    private AcceptingOrExit booleanToAcceptingOrExit(boolean accepting) {
-        if (accepting) {
-            return AcceptingOrExit.ACCEPTING;
-        } else {
-            return AcceptingOrExit.REJECTING;
         }
     }
 }

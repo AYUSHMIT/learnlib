@@ -8,8 +8,12 @@ import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.SingleQueryOracle;
 import de.learnlib.datastructure.observationtable.OTUtils;
 import de.learnlib.datastructure.observationtable.writer.ObservationTableASCIIWriter;
+import de.learnlib.filter.statistic.oracle.CounterValueCounterOracle;
+import de.learnlib.filter.statistic.oracle.ROCACounterEQOracle;
 import de.learnlib.oracle.equivalence.roca.ROCASimulatorEQOracle;
+import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonCounterEQOracle;
 import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonSimulatorEQOracle;
+import de.learnlib.oracle.membership.roca.CounterValueOracle;
 import de.learnlib.oracle.membership.roca.RestrictedAutomatonCounterOracle;
 import de.learnlib.oracle.membership.roca.RestrictedAutomatonSimulatorOracle;
 import de.learnlib.util.statistics.SimpleProfiler;
@@ -57,11 +61,16 @@ public class ROCAExample {
         SingleQueryOracle.SingleQueryOracleRestrictedAutomaton<I> sul = new RestrictedAutomatonSimulatorOracle<>(target);
         RestrictedAutomatonCounterOracle<I> membershipOracle = new RestrictedAutomatonCounterOracle<>(sul, "membership queries");
 
-        EquivalenceOracle.ROCAEquivalenceOracle<I> equivalenceOracle = new ROCASimulatorEQOracle<>(target);
+        SingleQueryOracle.SingleQueryCounterValueOracle<I> counterValue = new CounterValueOracle<>(target);
+        CounterValueCounterOracle<I> counterValueOracle = new CounterValueCounterOracle<>(counterValue, "counter value queries");
 
-        RestrictedAutomatonSimulatorEQOracle<I> restrictedEquivalenceOracle = new RestrictedAutomatonSimulatorEQOracle<>(target, alphabet);
+        EquivalenceOracle.ROCAEquivalenceOracle<I> eqOracle = new ROCASimulatorEQOracle<>(target);
+        ROCACounterEQOracle<I> equivalenceOracle = new ROCACounterEQOracle<>(eqOracle, "equivalence queries");
 
-        LStarROCA<I> lstar_roca = new LStarROCA<>(membershipOracle, restrictedEquivalenceOracle, alphabet);
+        RestrictedAutomatonSimulatorEQOracle<I> resEqOracle = new RestrictedAutomatonSimulatorEQOracle<>(target, alphabet);
+        RestrictedAutomatonCounterEQOracle<I> restrictedEquivalenceOracle = new RestrictedAutomatonCounterEQOracle<>(resEqOracle, "partial equivalence queries");
+
+        LStarROCA<I> lstar_roca = new LStarROCA<>(membershipOracle, counterValueOracle, restrictedEquivalenceOracle, alphabet);
 
         ROCAExperiment<I> experiment = new ROCAExperiment<>(lstar_roca, equivalenceOracle, alphabet);
         experiment.setLogModels(false);
@@ -78,7 +87,10 @@ public class ROCAExample {
 
         // learning statistics
         System.out.println(experiment.getRounds().getSummary());
+        System.out.println(equivalenceOracle.getStatisticalData().getSummary());
+        System.out.println(restrictedEquivalenceOracle.getStatisticalData().getSummary());
         System.out.println(membershipOracle.getStatisticalData().getSummary());
+        System.out.println(counterValueOracle.getStatisticalData().getSummary());
 
         // model statistics
         System.out.println("States: " + result.size());
@@ -96,6 +108,6 @@ public class ROCAExample {
         System.out.println("Final observation table:");
         new ObservationTableASCIIWriter<>().write(lstar_roca.getObservationTable(), System.out);
 
-        OTUtils.displayHTMLInBrowser(lstar_roca.getObservationTable());
+        OTUtils.displayHTMLInBrowser(lstar_roca.getObservationTable().toClassicObservationTable());
     }
 }
