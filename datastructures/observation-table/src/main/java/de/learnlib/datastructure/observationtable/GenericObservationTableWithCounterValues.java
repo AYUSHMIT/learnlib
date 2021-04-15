@@ -250,9 +250,7 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
             }
         }
 
-        int distinctSpRows = numberOfDistinctRows();
-
-        List<List<Row<I>>> unclosed = new ArrayList<>();
+        Map<Integer, List<Row<I>>> unclosed = new HashMap<>();
 
         for (RowImpl<I> lpRow : longPrefixRows) {
             List<OutputAndCounterValue<D>> newRowContents = new ArrayList<>(fullRowContents(lpRow));
@@ -266,18 +264,24 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
                 OutputAndCounterValue<D> newCellContent = new OutputAndCounterValue<>(output, counterValue);
                 newRowContents.set(i, newCellContent);
             }
-            // We do not want a representative for the bin row
-            if (processContents(lpRow, newRowContents, false)) {
-                unclosed.add(new ArrayList<>());
+            if (processContents(lpRow, newRowContents, false) && !isBinRow(lpRow)) {
+                unclosed.put(lpRow.getRowContentId(), new ArrayList<>());
             }
 
-            int id = lpRow.getRowContentId();
-            if (id >= distinctSpRows && !isBinRow(lpRow)) {
-                unclosed.get(id - distinctSpRows).add(lpRow);
+            if (unclosed.containsKey(lpRow.getRowContentId())) {
+                unclosed.get(lpRow.getRowContentId()).add(lpRow);
             }
         }
 
-        return unclosed;
+        for (Map.Entry<Integer, List<Row<I>>> entry : checkForNewWordsInPrefixOfL().entrySet()) {
+            unclosed.merge(entry.getKey(), entry.getValue(), (v1, v2) -> {
+                List<Row<I>> row = new ArrayList<>(v1);
+                row.addAll(v2);
+                return row;
+            });
+        }
+
+        return new ArrayList<>(unclosed.values());
     }
 
     @Override
@@ -303,6 +307,20 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
         return newRow;
     }
 
+    /**
+     * If the rowContents is not yet in the table, creates a new content id.
+     * 
+     * It may happen that processing the contents leads to an unused id because the
+     * rows that used that id now have different contents. In that case, the new id
+     * is that unused id.
+     * 
+     * @param row           The row to update
+     * @param rowContents   The new row contents
+     * @param makeCanonical If true, the row is made canonical if the contents are
+     *                      added in the table
+     * @return True if the contents are added to the table (i.e., it is the first
+     *         row with these contents).
+     */
     private boolean processContents(RowImpl<I> row, List<OutputAndCounterValue<D>> rowContents, boolean makeCanonical) {
         int contentId;
         boolean added = false;
@@ -463,11 +481,8 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
             }
         }
 
-        int numSpRows = numberOfDistinctRows();
-
         for (RowImpl<I> row : longPrefixRows) {
             List<OutputAndCounterValue<D>> rowContents = new ArrayList<>(fullRowContents(row));
-            boolean changed = false;
             for (int i = 0; i < suffixes.size(); i++) {
                 OutputAndCounterValue<D> cell = rowContents.get(i);
                 Word<I> word = row.getLabel().concat(suffixes.get(i));
@@ -476,21 +491,16 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
                         D output = cell.getOutput();
                         int counterValue = counterValueOracle.answerQuery(word);
                         rowContents.set(i, new OutputAndCounterValue<>(output, counterValue));
-                        changed = true;
                     }
                 }
             }
 
-            if (changed) {
-                processContents(row, rowContents, false);
+            if (processContents(row, rowContents, false) && !isBinRow(row)) {
+                unclosed.put(row.getRowContentId(), new ArrayList<>());
+            }
 
-                int id = row.getRowContentId();
-                if (id >= numSpRows && !isBinRow(row)) {
-                    if (!unclosed.containsKey(id)) {
-                        unclosed.put(id, new ArrayList<>());
-                    }
-                    unclosed.get(id).add(row);
-                }
+            if (unclosed.containsKey(row.getRowContentId())) {
+                unclosed.get(row.getRowContentId()).add(row);
             }
         }
 
@@ -593,20 +603,24 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
                 contents.set(oldSuffixCount + i, new OutputAndCounterValue<>(output, counterValue));
             }
 
-            processContents(row, contents, false);
+            if (processContents(row, contents, false) && !isBinRow(row)) {
+                unclosed.put(row.getRowContentId(), new ArrayList<>());
+            }
 
-            int id = row.getRowContentId();
-            if (id >= numSpRows && !isBinRow(row)) {
-                if (!unclosed.containsKey(id)) {
-                    unclosed.put(id, new ArrayList<>());
-                }
-                unclosed.get(id).add(row);
+            if (unclosed.containsKey(row.getRowContentId())) {
+                unclosed.get(row.getRowContentId()).add(row);
             }
         }
 
-        this.suffixes.addAll(newSuffixList);
+        for (Map.Entry<Integer, List<Row<I>>> entry : checkForNewWordsInPrefixOfL().entrySet()) {
+            unclosed.merge(entry.getKey(), entry.getValue(), (v1, v2) -> {
+                List<Row<I>> row = new ArrayList<>(v1);
+                row.addAll(v2);
+                return row;
+            });
+        }
 
-        unclosed.putAll(checkForNewWordsInPrefixOfL());
+        this.suffixes.addAll(newSuffixList);
 
         return new ArrayList<>(unclosed.values());
     }
@@ -704,7 +718,6 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
             processContents(row, contents, true);
         }
 
-        int numSpRows = numberOfDistinctRows();
         Map<Integer, List<Row<I>>> unclosed = new HashMap<>();
 
         for (RowImpl<I> row : freshLpRows) {
@@ -721,18 +734,22 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
                 contents.set(i, newCell);
             }
 
-            processContents(row, contents, false);
+            if (processContents(row, contents, false) && !isBinRow(row)) {
+                unclosed.put(row.getRowContentId(), new ArrayList<>());
+            }
 
-            int id = row.getRowContentId();
-            if (id >= numSpRows && !isBinRow(row)) {
-                if (!unclosed.containsKey(id)) {
-                    unclosed.put(id, new ArrayList<>());
-                }
-                unclosed.get(id).add(row);
+            if (unclosed.containsKey(row.getRowContentId())) {
+                unclosed.get(row.getRowContentId()).add(row);
             }
         }
 
-        unclosed.putAll(checkForNewWordsInPrefixOfL());
+        for (Map.Entry<Integer, List<Row<I>>> entry : checkForNewWordsInPrefixOfL().entrySet()) {
+            unclosed.merge(entry.getKey(), entry.getValue(), (v1, v2) -> {
+                List<Row<I>> row = new ArrayList<>(v1);
+                row.addAll(v2);
+                return row;
+            });
+        }
 
         return new ArrayList<>(unclosed.values());
     }
@@ -781,7 +798,6 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
         }
 
         Map<Integer, List<Row<I>>> unclosed = new HashMap<>();
-        int numSpRows = numberOfDistinctRows();
 
         for (RowImpl<I> row : longPrefixRows) {
             List<OutputAndCounterValue<D>> rowContents = new ArrayList<>(fullRowContents(row));
@@ -796,18 +812,22 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
                 }
             }
 
-            processContents(row, rowContents, false);
+            if (processContents(row, rowContents, false) && !isBinRow(row)) {
+                unclosed.put(row.getRowContentId(), new ArrayList<>());
+            }
 
-            int id = row.getRowContentId();
-            if (!isBinRow(row) && id >= numSpRows) {
-                if (!unclosed.containsKey(id)) {
-                    unclosed.put(id, new ArrayList<>());
-                }
-                unclosed.get(id).add(row);
+            if (unclosed.containsKey(row.getRowContentId())) {
+                unclosed.get(row.getRowContentId()).add(row);
             }
         }
 
-        unclosed.putAll(checkForNewWordsInPrefixOfL());
+        for (Map.Entry<Integer, List<Row<I>>> entry : checkForNewWordsInPrefixOfL().entrySet()) {
+            unclosed.merge(entry.getKey(), entry.getValue(), (v1, v2) -> {
+                List<Row<I>> row = new ArrayList<>(v1);
+                row.addAll(v2);
+                return row;
+            });
+        }
         return new ArrayList<>(unclosed.values());
     }
 
@@ -886,7 +906,6 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
 
             // PASS 2: counter value queries
             final Map<Integer, List<Row<I>>> unclosed = new HashMap<>();
-            final int numSpRows = numberOfDistinctRows();
             for (RowImpl<I> row : newLongPrefixes) {
                 final List<OutputAndCounterValue<D>> contents = new ArrayList<>(fullRowContents(row));
                 for (int i = 0; i < numSuffixes; i++) {
@@ -899,18 +918,22 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
                     contents.set(i, new OutputAndCounterValue<>(output, counterValue));
                 }
 
-                processContents(row, contents, false);
+                if (processContents(row, contents, false) && !isBinRow(row)) {
+                    unclosed.put(row.getRowContentId(), new ArrayList<>());
+                }
 
-                int id = row.getRowContentId();
-                if (id >= numSpRows && !isBinRow(row)) {
-                    if (!unclosed.containsKey(id)) {
-                        unclosed.put(id, new ArrayList<>());
-                    }
-                    unclosed.get(id).add(row);
+                if (unclosed.containsKey(row.getRowContentId())) {
+                    unclosed.get(row.getRowContentId()).add(row);
                 }
             }
 
-            unclosed.putAll(checkForNewWordsInPrefixOfL());
+            for (Map.Entry<Integer, List<Row<I>>> entry : checkForNewWordsInPrefixOfL().entrySet()) {
+                unclosed.merge(entry.getKey(), entry.getValue(), (v1, v2) -> {
+                    List<Row<I>> row = new ArrayList<>(v1);
+                    row.addAll(v2);
+                    return row;
+                });
+            }
 
             return new ArrayList<>(unclosed.values());
         } else {
