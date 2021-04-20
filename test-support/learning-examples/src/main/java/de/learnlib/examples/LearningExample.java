@@ -17,6 +17,7 @@ package de.learnlib.examples;
 
 import net.automatalib.automata.UniversalAutomaton;
 import net.automatalib.automata.fsa.DFA;
+import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.spa.SPA;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.automata.transducers.StateLocalInputMealyMachine;
@@ -68,5 +69,7 @@ public interface LearningExample<I, A> {
         @Override
         VPDAlphabet<I> getAlphabet();
     }
+
+    interface ROCALearningExample<I> extends LearningExample<I, ROCA<?, I>> { }
 
 }

@@ -1,10 +1,10 @@
 package de.learnlib.algorithms.lstar.roca;
 
 import java.util.List;
+import java.util.Objects;
 
 import de.learnlib.api.oracle.MembershipOracle.CounterValueOracle;
 import de.learnlib.datastructure.observationtable.GenericObservationTableWithCounterValues;
-import de.learnlib.datastructure.observationtable.Row;
 import net.automatalib.words.Alphabet;
 
 /**
@@ -23,11 +23,10 @@ public class ObservationTableWithCounterValues<I> extends GenericObservationTabl
     }
 
     @Override
-    protected boolean isBinRow(Row<I> row) {
-        List<OutputAndCounterValue<Boolean>> rowContents = fullRowContents(row);
+    protected boolean isBinContents(List<OutputAndCounterValue<Boolean>> contents) {
         for (int i = 0; i < numberOfSuffixes(); i++) {
-            OutputAndCounterValue<Boolean> cell = rowContents.get(i);
-            if (cell.getOutput() || cell.getCounterValue() != NO_COUNTER_VALUE) {
+            OutputAndCounterValue<Boolean> cell = contents.get(i);
+            if (cell.getOutput() || !Objects.equals(cell.getCounterValue(), NO_COUNTER_VALUE)) {
                 return false;
             }
         }

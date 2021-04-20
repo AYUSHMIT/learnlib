@@ -19,6 +19,7 @@ import net.automatalib.automata.UniversalAutomaton;
 import net.automatalib.automata.concepts.InputAlphabetHolder;
 import net.automatalib.automata.concepts.SuffixOutput;
 import net.automatalib.automata.fsa.DFA;
+import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.spa.SPA;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.automata.transducers.SubsequentialTransducer;
@@ -136,6 +137,30 @@ public class DefaultLearningExample<I, D, A extends UniversalAutomaton<?, I, ?, 
         @Override
         public SPAAlphabet<I> getAlphabet() {
             return this.referenceAutomaton.getInputAlphabet();
+        }
+    }
+
+    public static class DefaultROCALearningExample<I> implements ROCALearningExample<I> {
+        private final Alphabet<I> alphabet;
+        private final ROCA<?, I> referenceAutomaton;
+
+        public DefaultROCALearningExample(ROCA<?, I> referenceAutomaton) {
+            this(referenceAutomaton.getAlphabet(), referenceAutomaton);
+        }
+
+        public DefaultROCALearningExample(Alphabet<I> alphabet, ROCA<?, I> referenceAutomaton) {
+            this.alphabet = alphabet;
+            this.referenceAutomaton = referenceAutomaton;
+        }
+
+        @Override
+        public ROCA<?, I> getReferenceAutomaton() {
+            return referenceAutomaton;
+        }
+
+        @Override
+        public Alphabet<I> getAlphabet() {
+            return alphabet;
         }
     }
 

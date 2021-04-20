@@ -184,13 +184,16 @@ public final class LStarROCA<I>
             }
 
             int oldDistinctRows = table.numberOfDistinctRows();
+            int oldSuffixes = table.numberOfSuffixes();
+
             // Since we want that for all cells in the table with label u, u is in the prefix of the target language, we can not add the prefixes of the counterexample as representatives.
             // Indeed, we can not be sure that the provided counterexample should be accepted.
             // Therefore, we instead add the suffixes as separators.
             List<Word<I>> suffixes = ce.getInput().suffixes(false);
             List<List<Row<I>>> unclosed = table.addSuffixes(suffixes, membershipOracle);
+
             completeConsistentTable(unclosed, true);
-            assert table.numberOfDistinctRows() > oldDistinctRows;
+            assert table.numberOfDistinctRows() > oldDistinctRows || table.numberOfSuffixes() > oldSuffixes : "Nothing was learnt during the last iteration for DFA";
         }
     }
 
@@ -255,7 +258,9 @@ public final class LStarROCA<I>
             if (!Objects.equals(val1, val2)) {
                 I sym = alphabet.getSymbol(inputIdx);
                 Word<I> suffix = table.getSuffixes().get(i);
-                return suffix.prepend(sym);
+                if (!table.getSuffixes().contains(suffix.prepend(sym))) {
+                    return suffix.prepend(sym);
+                }
             }
         }
 
