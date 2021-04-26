@@ -577,6 +577,7 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
         List<OutputAndCounterValue<D>> rowContents = fullRowContents(row);
 
         Integer classID = null;
+        int numberMatches = 0;
 
         for (Row<I> spRow : shortPrefixRows) {
             if (row.getRowContentId() == spRow.getRowContentId()) {
@@ -584,13 +585,16 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
             }
 
             boolean equivalent = true;
+            int currentMatches = 0;
             List<OutputAndCounterValue<D>> spRowContents = fullRowContents(spRow);
             for (int i = 0; i < numberOfSuffixes(); i++) {
                 OutputAndCounterValue<D> rowCell = rowContents.get(i);
                 OutputAndCounterValue<D> spRowCell = spRowContents.get(i);
                 if (Objects.equals(rowCell.getOutput(), spRowCell.getOutput())) {
-                    if (rowCell.getCounterValue() != NO_COUNTER_VALUE
-                            && !Objects.equals(rowCell.getCounterValue(), spRowCell.getCounterValue())) {
+                    if (Objects.equals(rowCell.getCounterValue(), spRowCell.getCounterValue())) {
+                        currentMatches++;
+                    }
+                    else if (rowCell.getCounterValue() != NO_COUNTER_VALUE) {
                         equivalent = false;
                         break;
                     }
@@ -600,8 +604,9 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
                 }
             }
 
-            if (equivalent) {
+            if (equivalent && currentMatches > numberMatches) {
                 classID = spRow.getRowContentId();
+                numberMatches = currentMatches;
             }
         }
 
