@@ -2,12 +2,11 @@ package de.learnlib.algorithms.lstar.roca;
 
 import java.util.Collection;
 
-import de.learnlib.api.algorithm.LearningAlgorithm;
+import de.learnlib.api.algorithm.MultipleHypothesesLearningAlgorithm;
 import de.learnlib.api.logging.LearnLogger;
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.query.DefaultQuery;
-import de.learnlib.filter.statistic.Counter;
-import de.learnlib.util.statistics.SimpleProfiler;
+import de.learnlib.util.AbstractExperiment;
 import net.automatalib.automata.oca.ROCA;
 import net.automatalib.words.Alphabet;
 
@@ -16,79 +15,26 @@ import net.automatalib.words.Alphabet;
  * 
  * @author Gaëtan Staquet
  */
-public final class ROCAExperiment<I> {
+public final class ROCAExperiment<I> extends AbstractExperiment<ROCA<?, I>> {
 
     public static final String LEARNING_ROCA_PROFILE_KEY = "Learning ROCA";
     public static final String COUNTEREXAMPLE_PROFILE_KEY = "Searching for counterexample";
 
     private static final LearnLogger LOGGER = LearnLogger.getLogger(ROCAExperiment.class);
-    private boolean logModels;
-    private boolean profile;
-    private final Counter rounds = new Counter("learning rounds", "#");
 
-    private final LearningAlgorithm.ROCALearner<I> learningAlgorithm;
+    private final MultipleHypothesesLearningAlgorithm.ROCALearner<I> learningAlgorithm;
     private final EquivalenceOracle.ROCAEquivalenceOracle<I> equivalenceOracle;
     private final Alphabet<I> alphabet;
 
-    private ROCA<?, I> finalHypothesis;
-
-    public ROCAExperiment(LearningAlgorithm.ROCALearner<I> learningAlgorithm,
+    public ROCAExperiment(MultipleHypothesesLearningAlgorithm.ROCALearner<I> learningAlgorithm,
             EquivalenceOracle.ROCAEquivalenceOracle<I> equivalenceOracle, Alphabet<I> inputs) {
         this.learningAlgorithm = learningAlgorithm;
         this.equivalenceOracle = equivalenceOracle;
         this.alphabet = inputs;
     }
 
-    public ROCA<?, I> run() {
-        if (finalHypothesis != null) {
-            throw new IllegalStateException("Experiment has already been run");
-        }
-
-        finalHypothesis = learn();
-        return finalHypothesis;
-    }
-
-    public ROCA<?, I> getFinalHypothesis() {
-        if (finalHypothesis == null) {
-            throw new IllegalStateException("Experiment has not yet been run");
-        }
-        return finalHypothesis;
-    }
-
-    private void profileStart(String taskName) {
-        if (profile) {
-            SimpleProfiler.start(taskName);
-        }
-    }
-
-    private void profileStop(String taskName) {
-        if (profile) {
-            SimpleProfiler.stop(taskName);
-        }
-    }
-
-    /**
-     * @param logModels flag whether models should be logged
-     */
-    public void setLogModels(boolean logModels) {
-        this.logModels = logModels;
-    }
-
-    /**
-     * @param profile flag whether learning process should be profiled
-     */
-    public void setProfile(boolean profile) {
-        this.profile = profile;
-    }
-
-    /**
-     * @return the rounds
-     */
-    public Counter getRounds() {
-        return rounds;
-    }
-
-    private ROCA<?, I> learn() {
+    @Override
+    protected ROCA<?, I> runInternal() {
         rounds.increment();
         LOGGER.logPhase("Starting round " + rounds.getCount());
         LOGGER.logPhase("Learning");

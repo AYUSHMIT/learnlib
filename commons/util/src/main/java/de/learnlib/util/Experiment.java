@@ -19,13 +19,10 @@ import de.learnlib.api.algorithm.LearningAlgorithm;
 import de.learnlib.api.logging.LearnLogger;
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.query.DefaultQuery;
-import de.learnlib.filter.statistic.Counter;
-import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * runs a learning experiment.
@@ -34,17 +31,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *
  * @author falkhowar
  */
-public class Experiment<A extends Object> {
+public class Experiment<A extends Object> extends AbstractExperiment<A> {
 
     public static final String LEARNING_PROFILE_KEY = "Learning";
     public static final String COUNTEREXAMPLE_PROFILE_KEY = "Searching for counterexample";
 
     private static final LearnLogger LOGGER = LearnLogger.getLogger(Experiment.class);
     private final ExperimentImpl<?, ?> impl;
-    private boolean logModels;
-    private boolean profile;
-    private final Counter rounds = new Counter("learning rounds", "#");
-    private @Nullable A finalHypothesis;
 
     public <I, D> Experiment(LearningAlgorithm<? extends A, I, D> learningAlgorithm,
                              EquivalenceOracle<? super A, I, D> equivalenceAlgorithm,
@@ -52,56 +45,9 @@ public class Experiment<A extends Object> {
         this.impl = new ExperimentImpl<>(learningAlgorithm, equivalenceAlgorithm, inputs);
     }
 
-    public A run() {
-        if (this.finalHypothesis != null) {
-            throw new IllegalStateException("Experiment has already been run");
-        }
-
-        finalHypothesis = impl.run();
-        return finalHypothesis;
-    }
-
-    public A getFinalHypothesis() {
-        if (finalHypothesis == null) {
-            throw new IllegalStateException("Experiment has not yet been run");
-        }
-
-        return finalHypothesis;
-    }
-
-    private void profileStart(String taskname) {
-        if (profile) {
-            SimpleProfiler.start(taskname);
-        }
-    }
-
-    private void profileStop(String taskname) {
-        if (profile) {
-            SimpleProfiler.stop(taskname);
-        }
-    }
-
-    /**
-     * @param logModels
-     *         flag whether models should be logged
-     */
-    public void setLogModels(boolean logModels) {
-        this.logModels = logModels;
-    }
-
-    /**
-     * @param profile
-     *         flag whether learning process should be profiled
-     */
-    public void setProfile(boolean profile) {
-        this.profile = profile;
-    }
-
-    /**
-     * @return the rounds
-     */
-    public Counter getRounds() {
-        return rounds;
+    @Override
+    protected A runInternal() {
+        return impl.run();
     }
 
     private final class ExperimentImpl<I, D> {
