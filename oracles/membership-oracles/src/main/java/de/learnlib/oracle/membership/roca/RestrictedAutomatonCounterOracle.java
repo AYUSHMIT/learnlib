@@ -34,11 +34,6 @@ public class RestrictedAutomatonCounterOracle<I> extends CounterOracle<I, Boolea
     }
 
     @Override
-    public int getCounterLimit() {
-        return nextOracle.getCounterLimit();
-    }
-
-    @Override
     public void setNext(MembershipOracle<I, Boolean> next) {
         if (!SingleQueryOracleRestrictedAutomaton.class.isInstance(next)) {
             throw new InvalidParameterException("The oracle used for automata with counter values must implement SingleQueryOracleAutomatonWithCounterValues");

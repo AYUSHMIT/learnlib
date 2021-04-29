@@ -5,15 +5,19 @@ import de.learnlib.filter.statistic.oracle.CounterEQOracle;
 import net.automatalib.automata.fsa.DFA;
 
 /**
- * A {@link CounterEQOracle} for equivalence queries over a restricted automaton, up to a counter limit.
+ * A {@link CounterEQOracle} for equivalence queries over a restricted
+ * automaton, up to a counter limit.
  * 
+ * @param <I> Input alphabet type
  * @author Gaëtan Staquet
  */
-public class RestrictedAutomatonCounterEQOracle<I> extends CounterEQOracle<DFA<?, I>, I, Boolean> implements EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> {
+public class RestrictedAutomatonCounterEQOracle<I> extends CounterEQOracle<DFA<?, I>, I, Boolean>
+        implements EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> {
 
     EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> oracle;
 
-    public RestrictedAutomatonCounterEQOracle(EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> equivalenceOracle, String name) {
+    public RestrictedAutomatonCounterEQOracle(
+            EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> equivalenceOracle, String name) {
         super(equivalenceOracle, name);
         this.oracle = equivalenceOracle;
     }
@@ -28,9 +32,4 @@ public class RestrictedAutomatonCounterEQOracle<I> extends CounterEQOracle<DFA<?
         getNextOracle().setCounterLimit(counterLimit);
     }
 
-    @Override
-    public int getCounterLimit() {
-        return getNextOracle().getCounterLimit();
-    }
-    
 }

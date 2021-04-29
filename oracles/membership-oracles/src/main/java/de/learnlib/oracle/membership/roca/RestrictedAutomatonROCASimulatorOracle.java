@@ -15,31 +15,29 @@ import net.automatalib.words.Word;
  * 
  * @author Gaëtan Staquet
  */
-public final class RestrictedAutomatonSimulatorOracle<I> implements SingleQueryOracle.SingleQueryOracleRestrictedAutomaton<I> {
+public final class RestrictedAutomatonROCASimulatorOracle<I>
+        implements SingleQueryOracle.SingleQueryOracleRestrictedAutomaton<I> {
 
     private final ROCA<?, I> roca;
-    private AutomatonWithCounterValues<?, I> reference;
-    private int counterLimit = 0;
+    private AutomatonWithCounterValues<?, I, ROCA<?, I>> reference;
 
-    public RestrictedAutomatonSimulatorOracle(final ROCA<?, I> roca) {
+    public RestrictedAutomatonROCASimulatorOracle(final ROCA<?, I> roca) {
+        this(roca, 0);
+    }
+
+    public RestrictedAutomatonROCASimulatorOracle(final ROCA<?, I> roca, int counterLimit) {
         this.roca = roca;
-        reference = OCAUtil.constructRestrictedAutomaton(roca, 0);
+        setCounterLimit(counterLimit);
     }
 
     @Override
     public void setCounterLimit(int counterLimit) {
-        this.counterLimit = counterLimit;
         reference = OCAUtil.constructRestrictedAutomaton(roca, counterLimit);
-    }
-
-    @Override
-    public int getCounterLimit() {
-        return counterLimit;
     }
 
     @Override
     public Boolean answerQuery(Word<I> prefix, Word<I> suffix) {
         return reference.computeSuffixOutput(prefix, suffix);
     }
-    
+
 }

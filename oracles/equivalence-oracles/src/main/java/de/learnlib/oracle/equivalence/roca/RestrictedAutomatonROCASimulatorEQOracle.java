@@ -15,7 +15,8 @@ import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
 
 /**
- * An equivalence oracle for a DFA learnt from a restricted automaton constructed from an ROCA.
+ * An equivalence oracle for a DFA learnt from a restricted automaton
+ * constructed from an ROCA.
  * 
  * Since such an automaton is constructed from a ROCA for a given maximal
  * counter value, that counter value limit must be explicitly increased by the
@@ -23,19 +24,18 @@ import net.automatalib.words.Word;
  * 
  * @author Gaëtan Staquet
  */
-public final class RestrictedAutomatonSimulatorEQOracle<I>
+public final class RestrictedAutomatonROCASimulatorEQOracle<I>
         implements EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> {
 
     private final ROCA<?, I> roca;
     private final Alphabet<I> alphabet;
     private DFA<?, I> reference;
-    private int counterLimit;
 
-    public RestrictedAutomatonSimulatorEQOracle(final ROCA<?, I> reference, final Alphabet<I> alphabet) {
+    public RestrictedAutomatonROCASimulatorEQOracle(final ROCA<?, I> reference, final Alphabet<I> alphabet) {
         this(reference, alphabet, 0);
     }
 
-    public RestrictedAutomatonSimulatorEQOracle(final ROCA<?, I> reference, final Alphabet<I> alphabet,
+    public RestrictedAutomatonROCASimulatorEQOracle(final ROCA<?, I> reference, final Alphabet<I> alphabet,
             final int counterLimit) {
         this.roca = reference;
         this.alphabet = alphabet;
@@ -44,19 +44,12 @@ public final class RestrictedAutomatonSimulatorEQOracle<I>
 
     @Override
     public void setCounterLimit(int counterLimit) {
-        this.counterLimit = counterLimit;
         reference = OCAUtil.constructRestrictedAutomaton(roca, counterLimit);
         reference = DFAs.complete(reference, alphabet);
     }
 
     @Override
-    public int getCounterLimit() {
-        return counterLimit;
-    }
-
-    @Override
-    public @Nullable DefaultQuery<I, Boolean> findCounterExample(DFA<?, I> hypothesis,
-            Collection<? extends I> inputs) {
+    public @Nullable DefaultQuery<I, Boolean> findCounterExample(DFA<?, I> hypothesis, Collection<? extends I> inputs) {
         hypothesis = DFAs.complete(hypothesis, alphabet);
         Word<I> separator = Automata.findSeparatingWord(reference, hypothesis, alphabet);
 
