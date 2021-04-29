@@ -1,0 +1,78 @@
+package de.learnlib.api.algorithm;
+
+import java.util.Collection;
+
+import net.automatalib.automata.oca.ROCA;
+import net.automatalib.automata.oca.VCA;
+
+/**
+ * Basic interface for a model inference algorithm that can output multiple
+ * hypotheses each round.
+ * 
+ * The experiment using such a learner is expected to test each hypothesis and
+ * choose a counterexample if needed.
+ * 
+ * @param <M> Model type
+ * @param <I> Input symbol type
+ * @param <D> Output symbol type
+ * 
+ * @author Gaëtan Staquet
+ */
+public interface MultipleHypothesesLearningAlgorithm<M, I, D> extends LearningAlgorithm<M, I, D> {
+    /**
+     * As an ROCA learner can construct multiple ROCAs each iteration, this function
+     * should not be called.
+     * 
+     * See {@link getHypothesisModels()}.
+     */
+    @Override
+    default M getHypothesisModel() {
+        throw new UnsupportedOperationException(
+                "Since the learning algorithm can construct multiple hypotheses in a round, please use getHypothesisModels()");
+    }
+
+    /**
+     * Gets every model that can be constructed from the current knowledge such that
+     * the models are consistent with the knowledge.
+     * 
+     * In other words, it is guaranteed that the models and the learner's knowledge
+     * agree on the acceptance of the words known by the learner.
+     * 
+     * @return A collection of models
+     */
+    Collection<M> getHypothesisModels();
+
+    /**
+     * Specialization of a learner for ROCAs.
+     * 
+     * @param <I> Input alphabet type
+     */
+    interface ROCALearner<I> extends MultipleHypothesesLearningAlgorithm<ROCA<?, I>, I, Boolean> {
+        /**
+         * Gets the learnt DFA (the restricted automaton up to a counter value) as an
+         * ROCA.
+         * 
+         * @return An ROCA constructed from the learnt DFA
+         */
+        ROCA<?, I> getLearntDFAAsROCA();
+
+        int getCounterLimit();
+    }
+
+    /**
+     * Specialization of a learner for VCAs.
+     * 
+     * @param <I> Input alphabet type
+     */
+    interface VCALearner<I> extends MultipleHypothesesLearningAlgorithm<VCA<?, I>, I, Boolean> {
+        /**
+         * Gets the learnt DFA (the restricted automaton up to a counter value) as a
+         * VCA.
+         * 
+         * @return A VCA constructed from the learnt DFA
+         */
+        VCA<?, I> getLearntDFAAsVCA();
+
+        int getCounterLimit();
+    }
+}
