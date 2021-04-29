@@ -20,6 +20,7 @@ import net.automatalib.automata.concepts.InputAlphabetHolder;
 import net.automatalib.automata.concepts.SuffixOutput;
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.oca.ROCA;
+import net.automatalib.automata.oca.VCA;
 import net.automatalib.automata.spa.SPA;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.automata.transducers.SubsequentialTransducer;
@@ -30,15 +31,12 @@ import net.automatalib.words.VPDAlphabet;
 import net.automatalib.words.Word;
 
 /**
- * A {@link LearningExample learning example} that directly stores the alphabet and the reference automaton in its
- * fields.
+ * A {@link LearningExample learning example} that directly stores the alphabet
+ * and the reference automaton in its fields.
  *
- * @param <I>
- *         input symbol type
- * @param <D>
- *         output type
- * @param <A>
- *         automaton type
+ * @param <I> input symbol type
+ * @param <D> output type
+ * @param <A> automaton type
  *
  * @author Malte Isberner
  */
@@ -91,7 +89,8 @@ public class DefaultLearningExample<I, D, A extends UniversalAutomaton<?, I, ?, 
             extends DefaultLearningExample<I, Word<D>, SubsequentialTransducer<?, I, ?, D>>
             implements SSTLearningExample<I, D> {
 
-        public <A extends SubsequentialTransducer<?, I, ?, D> & InputAlphabetHolder<I>> DefaultSSTLearningExample(A automaton) {
+        public <A extends SubsequentialTransducer<?, I, ?, D> & InputAlphabetHolder<I>> DefaultSSTLearningExample(
+                A automaton) {
             this(automaton.getInputAlphabet(), automaton);
         }
 
@@ -164,4 +163,27 @@ public class DefaultLearningExample<I, D, A extends UniversalAutomaton<?, I, ?, 
         }
     }
 
+    public static class DefaultVCALearningExample<I> implements VCALearningExample<I> {
+        private final VPDAlphabet<I> alphabet;
+        private final VCA<?, I> referenceAutomaton;
+
+        public DefaultVCALearningExample(VCA<?, I> referenceAutomaton) {
+            this(referenceAutomaton.getAlphabet(), referenceAutomaton);
+        }
+
+        public DefaultVCALearningExample(VPDAlphabet<I> alphabet, VCA<?, I> referenceAutomaton) {
+            this.alphabet = alphabet;
+            this.referenceAutomaton = referenceAutomaton;
+        }
+
+        @Override
+        public VCA<?, I> getReferenceAutomaton() {
+            return referenceAutomaton;
+        }
+
+        @Override
+        public VPDAlphabet<I> getAlphabet() {
+            return alphabet;
+        }
+    }
 }

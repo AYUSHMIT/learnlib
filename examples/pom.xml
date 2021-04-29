@@ -89,6 +89,10 @@ limitations under the License.
         </dependency>
         <dependency>
             <groupId>de.learnlib</groupId>
+            <artifactId>learnlib-lstar-vca</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>de.learnlib</groupId>
             <artifactId>learnlib-membership-oracles</artifactId>
         </dependency>
         <dependency>
