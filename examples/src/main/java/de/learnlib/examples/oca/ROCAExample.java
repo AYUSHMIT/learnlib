@@ -7,15 +7,14 @@ import de.learnlib.algorithms.lstar.roca.ROCAExperiment;
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.SingleQueryOracle;
 import de.learnlib.datastructure.observationtable.OTUtils;
-import de.learnlib.examples.roca.ExampleRandomROCA;
 import de.learnlib.filter.statistic.oracle.CounterValueCounterOracle;
 import de.learnlib.filter.statistic.oracle.ROCACounterEQOracle;
 import de.learnlib.oracle.equivalence.roca.ROCASimulatorEQOracle;
 import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonCounterEQOracle;
-import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonSimulatorEQOracle;
+import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonROCASimulatorEQOracle;
 import de.learnlib.oracle.membership.roca.CounterValueOracle;
 import de.learnlib.oracle.membership.roca.RestrictedAutomatonCounterOracle;
-import de.learnlib.oracle.membership.roca.RestrictedAutomatonSimulatorOracle;
+import de.learnlib.oracle.membership.roca.RestrictedAutomatonROCASimulatorOracle;
 import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.automata.oca.DefaultROCA;
 import net.automatalib.automata.oca.ROCA;
@@ -32,12 +31,6 @@ public class ROCAExample {
     public static void main(String[] args) throws IOException {
         ROCA<?, Character> target = constructSUL();
         Alphabet<Character> alphabet = target.getAlphabet();
-
-        runExample(target, alphabet);
-
-        alphabet = Alphabets.characters('a', 'c');
-        ExampleRandomROCA<Character> example = new ExampleRandomROCA<>(alphabet, 2, 0.5);
-        target = example.getReferenceAutomaton();
 
         runExample(target, alphabet);
     }
@@ -64,7 +57,7 @@ public class ROCAExample {
     }
 
     private static <I> void runExample(ROCA<?, I> target, Alphabet<I> alphabet) throws IOException {
-        SingleQueryOracle.SingleQueryOracleRestrictedAutomaton<I> sul = new RestrictedAutomatonSimulatorOracle<>(
+        SingleQueryOracle.SingleQueryOracleRestrictedAutomaton<I> sul = new RestrictedAutomatonROCASimulatorOracle<>(
                 target);
         RestrictedAutomatonCounterOracle<I> membershipOracle = new RestrictedAutomatonCounterOracle<>(sul,
                 "membership queries");
@@ -76,7 +69,7 @@ public class ROCAExample {
         EquivalenceOracle.ROCAEquivalenceOracle<I> eqOracle = new ROCASimulatorEQOracle<>(target);
         ROCACounterEQOracle<I> equivalenceOracle = new ROCACounterEQOracle<>(eqOracle, "equivalence queries");
 
-        RestrictedAutomatonSimulatorEQOracle<I> resEqOracle = new RestrictedAutomatonSimulatorEQOracle<>(target,
+        RestrictedAutomatonROCASimulatorEQOracle<I> resEqOracle = new RestrictedAutomatonROCASimulatorEQOracle<>(target,
                 alphabet);
         RestrictedAutomatonCounterEQOracle<I> restrictedEquivalenceOracle = new RestrictedAutomatonCounterEQOracle<>(
                 resEqOracle, "partial equivalence queries");

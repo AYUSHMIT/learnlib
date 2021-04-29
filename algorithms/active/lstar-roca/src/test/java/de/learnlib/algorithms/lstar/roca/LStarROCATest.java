@@ -10,21 +10,21 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import de.learnlib.api.oracle.EquivalenceOracle;
-import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.oracle.EquivalenceOracle.ROCAEquivalenceOracle;
 import de.learnlib.api.oracle.EquivalenceOracle.RestrictedAutomatonEquivalenceOracle;
+import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.oracle.MembershipOracle.RestrictedAutomatonMembershipOracle;
 import de.learnlib.api.query.DefaultQuery;
+import de.learnlib.datastructure.observationtable.AbstractObservationTableWithCounterValues.OutputAndCounterValue;
 import de.learnlib.datastructure.observationtable.Row;
-import de.learnlib.datastructure.observationtable.GenericObservationTableWithCounterValues.OutputAndCounterValue;
 import de.learnlib.examples.dfa.ExamplePaulAndMary;
 import de.learnlib.examples.roca.ExampleRandomROCA;
 import de.learnlib.examples.roca.ExampleRegularROCA;
 import de.learnlib.examples.roca.ExampleTinyROCA;
 import de.learnlib.oracle.equivalence.roca.ROCASimulatorEQOracle;
-import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonSimulatorEQOracle;
+import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonROCASimulatorEQOracle;
 import de.learnlib.oracle.membership.roca.CounterValueOracle;
-import de.learnlib.oracle.membership.roca.RestrictedAutomatonSimulatorOracle;
+import de.learnlib.oracle.membership.roca.RestrictedAutomatonROCASimulatorOracle;
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.oca.ROCA;
 import net.automatalib.util.automata.oca.OCAUtil;
@@ -82,7 +82,7 @@ public class LStarROCATest {
         return null;
     }
 
-    private static <I> void checkEverything(ObservationTableWithCounterValues<I> table,
+    private static <I> void checkEverything(ObservationTableWithCounterValuesROCA<I> table,
             MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle,
             MembershipOracle.CounterValueOracle<I> counterValueOracle) {
         for (Row<I> row : table.getLongPrefixRows()) {
@@ -129,11 +129,11 @@ public class LStarROCATest {
     }
 
     private <I> void launch(ROCA<?, I> roca, Alphabet<I> alphabet) {
-        RestrictedAutomatonMembershipOracle<I> mOracle = new RestrictedAutomatonSimulatorOracle<>(roca);
+        RestrictedAutomatonMembershipOracle<I> mOracle = new RestrictedAutomatonROCASimulatorOracle<>(roca);
         CounterValueOracle<I> counterValueOracle = new CounterValueOracle<>(roca);
         ROCAEquivalenceOracle<I> rocaEqOracle = new ROCASimulatorEQOracle<>(roca);
-        RestrictedAutomatonEquivalenceOracle<I> restrictedEqOracle = new RestrictedAutomatonSimulatorEQOracle<>(roca,
-                alphabet);
+        RestrictedAutomatonEquivalenceOracle<I> restrictedEqOracle = new RestrictedAutomatonROCASimulatorEQOracle<>(
+                roca, alphabet);
 
         LStarROCA<I> learner = new LStarROCA<>(mOracle, counterValueOracle, restrictedEqOracle, alphabet);
 

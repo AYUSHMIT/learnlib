@@ -16,6 +16,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.query.DefaultQuery;
+import net.automatalib.automata.oca.automatoncountervalues.AutomatonWithCounterValues;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
 import net.automatalib.words.impl.Alphabets;
@@ -34,7 +35,7 @@ import net.automatalib.words.impl.Alphabets;
  * 
  * @author Gaëtan Staquet
  */
-public abstract class GenericObservationTableWithCounterValues<I, D> implements MutableObservationTable<I, D> {
+public abstract class AbstractObservationTableWithCounterValues<I, D> implements MutableObservationTable<I, D> {
 
     /**
      * Stores a pair (output, counter value).
@@ -103,22 +104,17 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
     private final List<Word<I>> suffixes = new ArrayList<>();
     private final Set<Word<I>> suffixSet = new HashSet<>();
 
-    // TODO: use a trie
-    private final Set<Word<I>> prefixesOfL = new HashSet<>();
-
     private final Alphabet<I> alphabet;
     private int alphabetSize;
     private int numRows;
     private int binRowContentsId = NO_BIN_ROW;
     private boolean initialConsistencyCheckRequired = false;
 
-    private final MembershipOracle.CounterValueOracle<I> counterValueOracle;
+    private int counterLimit;
 
-    public GenericObservationTableWithCounterValues(Alphabet<I> alphabet,
-            MembershipOracle.CounterValueOracle<I> counterValueOracle) {
+    public AbstractObservationTableWithCounterValues(Alphabet<I> alphabet) {
         this.alphabet = alphabet;
         alphabetSize = alphabet.size();
-        this.counterValueOracle = counterValueOracle;
     }
 
     private static <I, D> void buildQueries(List<DefaultQuery<I, D>> queryList, Word<I> prefix,
@@ -147,11 +143,16 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
         return true;
     }
 
-    private static <I, D> void fetchResults(Iterator<DefaultQuery<I, D>> queryIt, List<OutputAndCounterValue<D>> output,
-            int numSuffixes) {
-        for (int j = 0; j < numSuffixes; j++) {
+    private void fetchResults(Iterator<DefaultQuery<I, D>> queryIt, List<OutputAndCounterValue<D>> output,
+            boolean canAskCounterValues, Word<I> prefix, List<Word<I>> suffixes) {
+        for (int i = 0; i < suffixes.size(); i++) {
             DefaultQuery<I, D> query = queryIt.next();
-            output.add(new OutputAndCounterValue<>(query.getOutput(), null));
+            int counterValue = NO_COUNTER_VALUE;
+            Word<I> suffix = suffixes.get(i);
+            if (canAskCounterValues && canHaveCounterValue(prefix, suffix, counterLimit)) {
+                counterValue = getCounterValue(prefix, suffix);
+            }
+            output.add(new OutputAndCounterValue<>(query.getOutput(), counterValue));
         }
     }
 
@@ -185,12 +186,63 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
     protected abstract boolean isAccepted(OutputAndCounterValue<D> outputAndCounterValue);
 
     /**
+     * Gets the counter value of the given word.
+     * 
+     * It is guaranteed that canHaveCounterValue returns true for the given prefix
+     * and suffix.
+     * 
+     * If needed, asks a query to an oracle.
+     * 
+     * @param prefix The prefix
+     * @param suffix The suffix
+     * @return The counter value
+     */
+    protected abstract int getCounterValue(Word<I> prefix, Word<I> suffix);
+
+    /**
+     * Whether the algorithm needs one specific pass over the table to get the
+     * counter values.
+     * 
+     * @return True iff a second pass is needed each time the table is modified
+     */
+    protected abstract boolean requiresSecondPassForCounterValues();
+
+    /**
+     * Whether the concatenation of the given prefix and suffix can have a counter
+     * value in the table, for the given counter limit.
+     * 
+     * If this function returns {@code false}, the value {@code NO_COUNTER_VALUE} is
+     * put instead.
+     * 
+     * @param prefix       The prefix
+     * @param suffix       The suffix
+     * @param counterLimit The counter limit
+     * @return True iff a counter value can be stored for that word
+     */
+    protected abstract boolean canHaveCounterValue(Word<I> prefix, Word<I> suffix, int counterLimit);
+
+    /**
+     * Lets the implementations update internal data according to the given row and
+     * row contents.
+     * 
+     * For example, for ROCA learning, the table keeps a list of words that are
+     * known to be in the prefix of the language.
+     * 
+     * @param row         The row
+     * @param rowContents The row contents
+     */
+    protected abstract void processRowInternal(Row<I> row, List<OutputAndCounterValue<D>> rowContents);
+
+    /**
      * Asks counter value queries for all cells with missing counter values in the
      * provided rows, at the condition that the cell corresponds to a word that is
      * in the prefix of the language.
      * 
      * That is, if a cell has a null or NO_COUNTER_VALUE counter value, this
      * function asks a counter value query.
+     * 
+     * Note that this function is called only if
+     * {@link requiresSecondPassForCounterValues} returns true.
      * 
      * @param shortPrefixRows The short prefix rows
      * @param longPrefixRows  The long prefix rows
@@ -200,12 +252,11 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
             List<OutputAndCounterValue<D>> contents = new ArrayList<>(fullRowContents(row));
             for (int i = 0; i < numberOfSuffixes(); i++) {
                 OutputAndCounterValue<D> cell = contents.get(i);
-                if (cell.getCounterValue() == null || cell.getCounterValue() == NO_COUNTER_VALUE) {
-                    Word<I> word = row.getLabel().concat(getSuffix(i));
+                if (cell.getCounterValue() == NO_COUNTER_VALUE) {
                     D output = cell.getOutput();
                     int counterValue = NO_COUNTER_VALUE;
-                    if (prefixesOfL.contains(word)) {
-                        counterValue = counterValueOracle.answerQuery(word);
+                    if (canHaveCounterValue(row.getLabel(), getSuffix(i), counterLimit)) {
+                        counterValue = getCounterValue(row.getLabel(), getSuffix(i));
                     }
                     contents.set(i, new OutputAndCounterValue<>(output, counterValue));
                 }
@@ -218,12 +269,11 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
             List<OutputAndCounterValue<D>> contents = new ArrayList<>(fullRowContents(row));
             for (int i = 0; i < numberOfSuffixes(); i++) {
                 OutputAndCounterValue<D> cell = contents.get(i);
-                if (cell.getCounterValue() == null || cell.getCounterValue() == NO_COUNTER_VALUE) {
-                    Word<I> word = row.getLabel().concat(getSuffix(i));
+                if (cell.getCounterValue() == NO_COUNTER_VALUE) {
                     D output = cell.getOutput();
                     int counterValue = NO_COUNTER_VALUE;
-                    if (prefixesOfL.contains(word)) {
-                        counterValue = counterValueOracle.answerQuery(word);
+                    if (canHaveCounterValue(row.getLabel(), getSuffix(i), counterLimit)) {
+                        counterValue = getCounterValue(row.getLabel(), getSuffix(i));
                     }
                     contents.set(i, new OutputAndCounterValue<>(output, counterValue));
                 }
@@ -289,7 +339,7 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
 
         for (RowImpl<I> spRow : shortPrefixRows) {
             List<OutputAndCounterValue<D>> rowContents = new ArrayList<>(numSuffixes);
-            fetchResults(queryIt, rowContents, numSuffixes);
+            fetchResults(queryIt, rowContents, !requiresSecondPassForCounterValues(), spRow.getLabel(), getSuffixes());
             if (!processContents(spRow, rowContents, true)) {
                 initialConsistencyCheckRequired = true;
             }
@@ -302,13 +352,16 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
                     continue;
                 }
                 List<OutputAndCounterValue<D>> rowContents = new ArrayList<>(numSuffixes);
-                fetchResults(queryIt, rowContents, numSuffixes);
+                fetchResults(queryIt, rowContents, !requiresSecondPassForCounterValues(), successorRow.getLabel(),
+                        getSuffixes());
                 processContents(successorRow, rowContents, false);
             }
         }
 
         // PASS 2: the counter values.
-        askCounterValueQueries(shortPrefixRows, longPrefixRows);
+        if (requiresSecondPassForCounterValues()) {
+            askCounterValueQueries(shortPrefixRows, longPrefixRows);
+        }
 
         return seekUnclosedRows();
     }
@@ -403,15 +456,9 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
         }
         row.setRowContentId(contentId);
 
-        // We update the set of prefixes of L, according to the table
-        for (int i = 0; i < numberOfSuffixes(); i++) {
-            if (isAccepted(rowContents.get(i))) {
-                Word<I> word = row.getLabel().concat(suffixes.get(i));
-                for (Word<I> prefix : word.prefixes(false)) {
-                    prefixesOfL.add(prefix);
-                }
-            }
-        }
+        // We let the implementations use the row to update their internal
+        // data
+        processRowInternal(row, rowContents);
 
         if (added && isBinContents(rowContents)) {
             binRowContentsId = row.getRowContentId();
@@ -530,10 +577,9 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
             for (int i = 0; i < numberOfSuffixes(); i++) {
                 OutputAndCounterValue<D> cell = rowContents.get(i);
                 if (cell.getCounterValue() == NO_COUNTER_VALUE) {
-                    Word<I> word = row.getLabel().concat(getSuffix(i));
-                    if (prefixesOfL.contains(word)) {
+                    if (canHaveCounterValue(row.getLabel(), getSuffix(i), counterLimit)) {
                         D output = cell.getOutput();
-                        int counterValue = counterValueOracle.answerQuery(word);
+                        int counterValue = getCounterValue(row.getLabel(), getSuffix(i));
                         OutputAndCounterValue<D> newCell = new OutputAndCounterValue<>(output, counterValue);
                         rowContents.set(i, newCell);
                     }
@@ -547,11 +593,10 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
             List<OutputAndCounterValue<D>> rowContents = new ArrayList<>(fullRowContents(row));
             for (int i = 0; i < numberOfSuffixes(); i++) {
                 OutputAndCounterValue<D> cell = rowContents.get(i);
-                Word<I> word = row.getLabel().concat(getSuffix(i));
-                if (cell.getCounterValue() == null || cell.getCounterValue() == NO_COUNTER_VALUE) {
-                    if (prefixesOfL.contains(word)) {
+                if (cell.getCounterValue() == NO_COUNTER_VALUE) {
+                    if (canHaveCounterValue(row.getLabel(), getSuffix(i), counterLimit)) {
                         D output = cell.getOutput();
-                        int counterValue = counterValueOracle.answerQuery(word);
+                        int counterValue = getCounterValue(row.getLabel(), getSuffix(i));
                         OutputAndCounterValue<D> newCell = new OutputAndCounterValue<>(output, counterValue);
                         rowContents.set(i, newCell);
                     }
@@ -593,8 +638,7 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
                 if (Objects.equals(rowCell.getOutput(), spRowCell.getOutput())) {
                     if (Objects.equals(rowCell.getCounterValue(), spRowCell.getCounterValue())) {
                         currentMatches++;
-                    }
-                    else if (rowCell.getCounterValue() != NO_COUNTER_VALUE) {
+                    } else if (rowCell.getCounterValue() != NO_COUNTER_VALUE) {
                         equivalent = false;
                         break;
                     }
@@ -682,7 +726,7 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
             List<OutputAndCounterValue<D>> currentContents = fullRowContents(row);
             List<OutputAndCounterValue<D>> newContents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
             newContents.addAll(currentContents.subList(0, oldSuffixCount));
-            fetchResults(queryIt, newContents, numNewSuffixes);
+            fetchResults(queryIt, newContents, !requiresSecondPassForCounterValues(), row.getLabel(), newSuffixList);
             processContents(row, newContents, true);
         }
 
@@ -690,41 +734,41 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
             List<OutputAndCounterValue<D>> currentContents = fullRowContents(row);
             List<OutputAndCounterValue<D>> newContents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
             newContents.addAll(currentContents.subList(0, oldSuffixCount));
-            fetchResults(queryIt, newContents, numNewSuffixes);
+            fetchResults(queryIt, newContents, !requiresSecondPassForCounterValues(), row.getLabel(), newSuffixList);
             processContents(row, newContents, false);
         }
 
         // PASS 2: counter values queries
-        for (RowImpl<I> row : shortPrefixRows) {
-            List<OutputAndCounterValue<D>> contents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
-            contents.addAll(fullRowContents(row));
-            for (int i = 0; i < numNewSuffixes; i++) {
-                Word<I> word = row.getLabel().concat(newSuffixList.get(i));
-                D output = contents.get(oldSuffixCount + i).getOutput();
-                int counterValue = NO_COUNTER_VALUE;
-                if (prefixesOfL.contains(word)) {
-                    counterValue = counterValueOracle.answerQuery(word);
+        if (requiresSecondPassForCounterValues()) {
+            for (RowImpl<I> row : shortPrefixRows) {
+                List<OutputAndCounterValue<D>> contents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
+                contents.addAll(fullRowContents(row));
+                for (int i = 0; i < numNewSuffixes; i++) {
+                    D output = contents.get(oldSuffixCount + i).getOutput();
+                    int counterValue = NO_COUNTER_VALUE;
+                    if (canHaveCounterValue(row.getLabel(), newSuffixList.get(i), counterLimit)) {
+                        counterValue = getCounterValue(row.getLabel(), newSuffixList.get(i));
+                    }
+                    contents.set(oldSuffixCount + i, new OutputAndCounterValue<>(output, counterValue));
                 }
-                contents.set(oldSuffixCount + i, new OutputAndCounterValue<>(output, counterValue));
+
+                processContents(row, contents, true);
             }
 
-            processContents(row, contents, true);
-        }
-
-        for (RowImpl<I> row : longPrefixRows) {
-            List<OutputAndCounterValue<D>> contents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
-            contents.addAll(fullRowContents(row));
-            for (int i = 0; i < numNewSuffixes; i++) {
-                Word<I> word = row.getLabel().concat(newSuffixList.get(i));
-                D output = contents.get(oldSuffixCount + i).getOutput();
-                int counterValue = NO_COUNTER_VALUE;
-                if (prefixesOfL.contains(word)) {
-                    counterValue = counterValueOracle.answerQuery(word);
+            for (RowImpl<I> row : longPrefixRows) {
+                List<OutputAndCounterValue<D>> contents = new ArrayList<>(oldSuffixCount + numNewSuffixes);
+                contents.addAll(fullRowContents(row));
+                for (int i = 0; i < numNewSuffixes; i++) {
+                    D output = contents.get(oldSuffixCount + i).getOutput();
+                    int counterValue = NO_COUNTER_VALUE;
+                    if (canHaveCounterValue(row.getLabel(), newSuffixList.get(i), counterLimit)) {
+                        counterValue = getCounterValue(row.getLabel(), newSuffixList.get(i));
+                    }
+                    contents.set(oldSuffixCount + i, new OutputAndCounterValue<>(output, counterValue));
                 }
-                contents.set(oldSuffixCount + i, new OutputAndCounterValue<>(output, counterValue));
-            }
 
-            processContents(row, contents, false);
+                processContents(row, contents, false);
+            }
         }
 
         // PASS 3: check for words that are now in the prefix of the language
@@ -798,18 +842,20 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
 
         for (RowImpl<I> row : freshSpRows) {
             List<OutputAndCounterValue<D>> contents = new ArrayList<>(numSuffixes);
-            fetchResults(queryIt, contents, numSuffixes);
+            fetchResults(queryIt, contents, !requiresSecondPassForCounterValues(), row.getLabel(), getSuffixes());
             processContents(row, contents, true);
         }
 
         for (RowImpl<I> row : freshLpRows) {
             List<OutputAndCounterValue<D>> contents = new ArrayList<>(numSuffixes);
-            fetchResults(queryIt, contents, numSuffixes);
+            fetchResults(queryIt, contents, !requiresSecondPassForCounterValues(), row.getLabel(), getSuffixes());
             processContents(row, contents, false);
         }
 
         // PASS 2: counter value queries
-        askCounterValueQueries(shortPrefixRows, longPrefixRows);
+        if (requiresSecondPassForCounterValues()) {
+            askCounterValueQueries(shortPrefixRows, longPrefixRows);
+        }
 
         // PASS 3: check for words that are now in the prefix of the language
         checkForNewWordsInPrefixOfL();
@@ -842,7 +888,8 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
         }
     }
 
-    public List<List<Row<I>>> increaseCounterLimit(MembershipOracle<I, D> oracle) {
+    public List<List<Row<I>>> increaseCounterLimit(int newCounterLimit, MembershipOracle<I, D> oracle) {
+        counterLimit = newCounterLimit;
         // PASS 1: ask membership queries for all words that potentially can be accepted
         // now.
         // That is, we aks a query for every cell such that the counter value is
@@ -874,7 +921,9 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
         }
 
         // PASS 2: counter value queries
-        askCounterValueQueries(shortPrefixRows, longPrefixRows);
+        if (requiresSecondPassForCounterValues()) {
+            askCounterValueQueries(shortPrefixRows, longPrefixRows);
+        }
 
         // PASS 3: check for words that are now in the prefix of the language
         checkForNewWordsInPrefixOfL();
@@ -950,13 +999,16 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
             for (RowImpl<I> row : newLongPrefixes) {
                 final List<OutputAndCounterValue<D>> contents = new ArrayList<>(numSuffixes);
 
-                fetchResults(queryIterator, contents, numSuffixes);
+                fetchResults(queryIterator, contents, !requiresSecondPassForCounterValues(), row.getLabel(),
+                        getSuffixes());
 
                 processContents(row, contents, false);
             }
 
             // PASS 2: counter value queries
-            askCounterValueQueries(Collections.emptyList(), newLongPrefixes);
+            if (requiresSecondPassForCounterValues()) {
+                askCounterValueQueries(Collections.emptyList(), newLongPrefixes);
+            }
 
             // PASS 3: check for words that are now in the prefix of the language
             checkForNewWordsInPrefixOfL();
@@ -1005,9 +1057,9 @@ public abstract class GenericObservationTableWithCounterValues<I, D> implements 
     public ObservationTable<I, OutputAndCounterValue<D>> toClassicObservationTable() {
         class Table implements ObservationTable<I, OutputAndCounterValue<D>> {
 
-            private final GenericObservationTableWithCounterValues<I, D> table;
+            private final AbstractObservationTableWithCounterValues<I, D> table;
 
-            public Table(GenericObservationTableWithCounterValues<I, D> table) {
+            public Table(AbstractObservationTableWithCounterValues<I, D> table) {
                 this.table = table;
             }
 

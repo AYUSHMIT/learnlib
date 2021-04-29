@@ -17,13 +17,13 @@ import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.datastructure.observationtable.Inconsistency;
 import de.learnlib.datastructure.observationtable.OTLearner;
 import de.learnlib.datastructure.observationtable.Row;
-import de.learnlib.datastructure.observationtable.GenericObservationTableWithCounterValues.OutputAndCounterValue;
+import de.learnlib.datastructure.observationtable.AbstractObservationTableWithCounterValues.OutputAndCounterValue;
 import de.learnlib.util.MQUtil;
 import de.learnlib.api.algorithm.feature.GlobalSuffixLearner;
 import net.automatalib.SupportsGrowingAlphabet;
 import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.oca.automatoncountervalues.AutomatonWithCounterValues;
-import net.automatalib.automata.oca.automatoncountervalues.DefaultAutomatonWithCounterValues;
+import net.automatalib.automata.oca.automatoncountervalues.DefaultAutomatonWithCounterValuesROCA;
 import net.automatalib.automata.oca.automatoncountervalues.DefaultAutomatonWithCounterValuesState;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
@@ -56,11 +56,11 @@ public final class LStarROCA<I>
     private final Alphabet<I> alphabet;
 
     private final MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle;
-    private MembershipOracle.CounterValueOracle<I> counterValueOracle;
+    private final MembershipOracle.CounterValueOracle<I> counterValueOracle;
     private final EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> restrictedAutomatonEquivalenceOracle;
 
-    private final ObservationTableWithCounterValues<I> table;
-    private AutomatonWithCounterValues<?, I> hypothesis;
+    private final ObservationTableWithCounterValuesROCA<I> table;
+    private AutomatonWithCounterValues<?, I, ROCA<?, I>> hypothesis;
     private int counterLimit;
 
     public LStarROCA(MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle,
@@ -71,22 +71,23 @@ public final class LStarROCA<I>
         this.counterValueOracle = counterValueOracle;
         this.restrictedAutomatonEquivalenceOracle = automatonWithCounterValuesEquivalenceOracle;
         this.alphabet = alphabet;
-        this.table = new ObservationTableWithCounterValues<>(alphabet, counterValueOracle);
+        this.table = new ObservationTableWithCounterValuesROCA<>(alphabet, counterValueOracle);
         counterLimit = 0;
     }
 
-    public void setCounterValueOracle(MembershipOracle.CounterValueOracle<I> counterValueOracle) {
-        this.counterValueOracle = counterValueOracle;
+    @Override
+    public int getCounterLimit() {
+        return counterLimit;
     }
 
     @Override
     public List<ROCA<?, I>> getHypothesisModels() {
         if (!table.isInitialized()) {
-            return Collections.singletonList(hypothesis.asROCA());
+            return Collections.singletonList(hypothesis.asAutomaton());
         }
 
         // @formatter:off
-        List<ROCA<?, I>> goodRocas = hypothesis.toROCAs(counterLimit).stream()
+        List<ROCA<?, I>> goodRocas = hypothesis.toAutomata(counterLimit).stream()
             .filter(roca -> isConsistent(roca))
             .collect(Collectors.toList());
         // @formatter:on
@@ -94,7 +95,7 @@ public final class LStarROCA<I>
     }
 
     private void constructHypothesisEmptyLanguage() {
-        DefaultAutomatonWithCounterValues<I> hypothesis = new DefaultAutomatonWithCounterValues<>(alphabet);
+        DefaultAutomatonWithCounterValuesROCA<I> hypothesis = new DefaultAutomatonWithCounterValuesROCA<>(alphabet);
         DefaultAutomatonWithCounterValuesState q0 = hypothesis.addInitialState(false, 0);
         for (I symbol : alphabet) {
             hypothesis.setSuccessor(q0, symbol, q0);
@@ -158,7 +159,7 @@ public final class LStarROCA<I>
         } else if (!MQUtil.isCounterexample(ceQuery, hypothesis)) {
             return false;
         } else {
-            unclosed = table.increaseCounterLimit(membershipOracle);
+            unclosed = table.increaseCounterLimit(counterLimit, membershipOracle);
             completeConsistentTable(unclosed, true);
             unclosed = ObservationTableCEXHandlers.handleClassicLStar(ceQuery, table, membershipOracle);
             completeConsistentTable(unclosed, true);
@@ -198,7 +199,7 @@ public final class LStarROCA<I>
     }
 
     @Override
-    public ObservationTableWithCounterValues<I> getObservationTable() {
+    public ObservationTableWithCounterValuesROCA<I> getObservationTable() {
         return table;
     }
 
@@ -293,7 +294,7 @@ public final class LStarROCA<I>
 
     @Override
     public ROCA<?, I> getLearntDFAAsROCA() {
-        return hypothesis.asROCA();
+        return hypothesis.asAutomaton();
     }
 
     private void updateHypothesis() {
@@ -301,7 +302,7 @@ public final class LStarROCA<I>
             throw new IllegalStateException("Cannot update internal hypothesis: not initialized");
         }
 
-        final DefaultAutomatonWithCounterValues<I> automaton = new DefaultAutomatonWithCounterValues<>(alphabet);
+        final DefaultAutomatonWithCounterValuesROCA<I> automaton = new DefaultAutomatonWithCounterValuesROCA<>(alphabet);
         final Set<Row<I>> representativeRows = table.getRepresentativeRows();
 
         Map<Integer, DefaultAutomatonWithCounterValuesState> idToState = new HashMap<>();
