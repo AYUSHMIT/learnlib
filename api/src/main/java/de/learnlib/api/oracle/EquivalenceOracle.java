@@ -20,6 +20,7 @@ import java.util.Collection;
 import de.learnlib.api.query.DefaultQuery;
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.oca.ROCA;
+import net.automatalib.automata.oca.VCA;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.words.Word;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -89,21 +90,28 @@ public interface EquivalenceOracle<A, I, D> {
      * A specialization of the {@link EquivalenceOracle} interface for a ROCA learning scenario.
      * 
      * @param <I>
-     *         input symbol class
+     *         input symbol type
      * 
      * @author Gaëtan Staquet
      */
     interface ROCAEquivalenceOracle<I> extends EquivalenceOracle<ROCA<?, I>, I, Boolean> {}
 
     /**
-     * A specialization of the {@link EquivalenceOracle} interface for a restricted automaton (i.e., a DFA constructed from an ROCA, up to a given counter value) learning scenario.
+     * A specialization of the {@link EquivalenceOracle} interface for a VCA learning scenario.
+     * 
+     * @param <I> Input symbol type
+     * 
+     * @author Gaëtan Staquet
+     */
+    interface VCAEquivalenceOracle<I> extends EquivalenceOracle<VCA<?, I>, I, Boolean> {}
+
+    /**
+     * A specialization of the {@link EquivalenceOracle} interface for a restricted automaton (i.e., a DFA annotated with counter values, up to a given counter value) learning scenario.
      * 
      * @param <I> Input symbol class
      * @author Gaëtan Staquet
      */
     interface RestrictedAutomatonEquivalenceOracle<I> extends EquivalenceOracle<DFA<?, I>, I, Boolean> {
         public void setCounterLimit(int counterLimit);
-        
-        public int getCounterLimit();
     }
 }

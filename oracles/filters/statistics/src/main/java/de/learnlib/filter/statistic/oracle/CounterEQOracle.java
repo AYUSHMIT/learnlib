@@ -8,6 +8,7 @@ import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.EquivalenceOracle.DFAEquivalenceOracle;
 import de.learnlib.api.oracle.EquivalenceOracle.MealyEquivalenceOracle;
 import de.learnlib.api.oracle.EquivalenceOracle.ROCAEquivalenceOracle;
+import de.learnlib.api.oracle.EquivalenceOracle.VCAEquivalenceOracle;
 import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.api.statistic.StatisticCollector;
 import de.learnlib.buildtool.refinement.annotation.GenerateRefinement;
@@ -17,6 +18,7 @@ import de.learnlib.buildtool.refinement.annotation.Map;
 import de.learnlib.filter.statistic.Counter;
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.oca.ROCA;
+import net.automatalib.automata.oca.VCA;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.words.Word;
 
@@ -25,6 +27,7 @@ import net.automatalib.words.Word;
  * 
  * @author Gaëtan Staquet
  */
+// @formatter:off
 @GenerateRefinement(name = "DFACounterEQOracle",
                     generics = "I",
                     parentGenerics = {@Generic(clazz = DFA.class, generics = {"?", "I"}), @Generic("I"), @Generic(clazz = Boolean.class)},
@@ -46,6 +49,14 @@ import net.automatalib.words.Word;
                                             to = ROCAEquivalenceOracle.class,
                                             withGenerics = "I"),
                     interfaces = @Interface(clazz = ROCAEquivalenceOracle.class, generics = "I"))
+@GenerateRefinement(name = "VCACounterEQOracle",
+                    generics = "I",
+                    parentGenerics = {@Generic(clazz = VCA.class, generics = {"?", "I"}), @Generic("I"), @Generic(clazz = Boolean.class)},
+                    parameterMapping = @Map(from = EquivalenceOracle.class,
+                                            to = VCAEquivalenceOracle.class,
+                                            withGenerics = "I"),
+                    interfaces = @Interface(clazz = VCAEquivalenceOracle.class, generics = "I"))
+// @formatter:on
 public class CounterEQOracle<A, I, D> implements EquivalenceOracle<A, I, D>, StatisticCollector {
 
     private final Counter counter;

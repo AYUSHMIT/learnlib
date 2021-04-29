@@ -106,8 +106,6 @@ public interface MembershipOracle<I, D> extends QueryAnswerer<I, D>, BatchProces
      */
     interface RestrictedAutomatonMembershipOracle<I> extends MembershipOracle<I, Boolean> {
         public void setCounterLimit(int counterLimit);
-        
-        public int getCounterLimit();
     }
 
     /**
