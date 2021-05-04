@@ -1,7 +1,5 @@
 package de.learnlib.algorithms.lstar.vca;
 
-import static de.learnlib.algorithms.lstar.vca.VCALearningUtils.computeMaximalCounterValue;
-
 import java.util.Collection;
 
 import de.learnlib.api.algorithm.MultipleHypothesesLearningAlgorithm;
@@ -10,6 +8,7 @@ import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.util.AbstractExperiment;
 import net.automatalib.automata.oca.VCA;
+import net.automatalib.util.automata.oca.OCAUtil;
 import net.automatalib.words.VPDAlphabet;
 
 /**
@@ -54,6 +53,7 @@ public class VCAExperiment<I> extends AbstractExperiment<VCA<?, I>> {
 
             LOGGER.logPhase("Searching for counterexample");
             DefaultQuery<I, Boolean> counterexample = null;
+            int maximalCounterValue = learningAlgorithm.getCounterLimit();
             for (VCA<?, I> hypothesis : hypotheses) {
                 if (logModels) {
                     LOGGER.logModel(hypothesis);
@@ -65,8 +65,12 @@ public class VCAExperiment<I> extends AbstractExperiment<VCA<?, I>> {
 
                 if (ce == null) {
                     return hypothesis;
-                } else if (computeMaximalCounterValue(ce.getInput(), alphabet) > learningAlgorithm.getCounterLimit()) {
+                }
+
+                int counterValue = OCAUtil.computeMaximalCounterValue(ce.getInput(), alphabet);
+                if (counterValue > maximalCounterValue) {
                     counterexample = ce;
+                    maximalCounterValue = counterValue;
                 }
             }
 

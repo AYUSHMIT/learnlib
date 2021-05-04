@@ -7,6 +7,7 @@ import de.learnlib.algorithms.lstar.vca.VCAExperiment;
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.SingleQueryOracle;
 import de.learnlib.datastructure.observationtable.OTUtils;
+import de.learnlib.datastructure.observationtable.writer.StratifiedObservationTableASCIIWriter;
 import de.learnlib.filter.statistic.oracle.VCACounterEQOracle;
 import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonCounterEQOracle;
 import de.learnlib.oracle.equivalence.vca.RestrictedAutomatonVCASimulatorEQOracle;
@@ -38,7 +39,7 @@ public class VCAExample {
     }
 
     private static VCA<?, Character> constructSUL() {
-        // L = {a^n b^m c^n | n > 1 and m > 0}
+        // L = {a^n b^m c^n | n > 0 and m > 0}
         // a is a call symbol, b an internal symbol, and c a return symbol
         VPDAlphabet<Character> alphabet = new DefaultVPDAlphabet<>(Alphabets.singleton('b'), Alphabets.singleton('a'),
                 Alphabets.singleton('c'));
@@ -74,9 +75,9 @@ public class VCAExample {
         RestrictedAutomatonCounterEQOracle<I> restrictedEquivalenceOracle = new RestrictedAutomatonCounterEQOracle<>(
                 resEqOracle, "partial equivalence queries");
 
-        LStarVCA<I> lstar_roca = new LStarVCA<>(membershipOracle, restrictedEquivalenceOracle, alphabet);
+        LStarVCA<I> lstar_vca = new LStarVCA<>(membershipOracle, restrictedEquivalenceOracle, alphabet);
 
-        VCAExperiment<I> experiment = new VCAExperiment<>(lstar_roca, equivalenceOracle, alphabet);
+        VCAExperiment<I> experiment = new VCAExperiment<>(lstar_vca, equivalenceOracle, alphabet);
         experiment.setLogModels(false);
         experiment.setProfile(true);
 
@@ -108,7 +109,9 @@ public class VCAExample {
         Visualization.visualize(result);
 
         System.out.println("-------------------------------------------------------");
+        System.out.println("Final observation table:");
+        new StratifiedObservationTableASCIIWriter<>().write(lstar_vca.getObservationTable(), System.out);
 
-        OTUtils.displayHTMLInBrowser(lstar_roca.getObservationTable().toClassicObservationTable());
+        OTUtils.displayHTMLInBrowser(lstar_vca.getObservationTable());
     }
 }

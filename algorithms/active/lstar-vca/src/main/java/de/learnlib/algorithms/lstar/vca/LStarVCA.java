@@ -1,32 +1,26 @@
 package de.learnlib.algorithms.lstar.vca;
 
-import static de.learnlib.algorithms.lstar.vca.VCALearningUtils.computeMaximalCounterValue;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
 
-import de.learnlib.algorithms.lstar.ce.ObservationTableCEXHandlers;
 import de.learnlib.api.algorithm.feature.GlobalSuffixLearner;
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.query.DefaultQuery;
-import de.learnlib.datastructure.observationtable.AbstractObservationTableWithCounterValues.OutputAndCounterValue;
 import de.learnlib.datastructure.observationtable.Inconsistency;
 import de.learnlib.datastructure.observationtable.OTLearner;
 import de.learnlib.datastructure.observationtable.Row;
+import de.learnlib.datastructure.observationtable.onecounter.StratifiedObservationTableWithCounterValues;
 import de.learnlib.util.MQUtil;
 import net.automatalib.SupportsGrowingAlphabet;
 import net.automatalib.automata.oca.VCA;
-import net.automatalib.automata.oca.automatoncountervalues.AutomatonWithCounterValues;
 import net.automatalib.automata.oca.automatoncountervalues.DefaultAutomatonWithCounterValuesState;
 import net.automatalib.automata.oca.automatoncountervalues.DefaultAutomatonWithCounterValuesVCA;
+import net.automatalib.util.automata.oca.OCAUtil;
 import net.automatalib.words.VPDAlphabet;
 import net.automatalib.words.Word;
 import net.automatalib.words.impl.Alphabets;
@@ -34,10 +28,17 @@ import net.automatalib.words.impl.Alphabets;
 /**
  * L* learner for VCAs.
  * 
- * The implementation is inspired by the unpublished paper "Learning Visibly
- * One-Counter Automata" by D. Neider and C. Löding (2010). Note that this is
- * not a strict implementation as the paper uses a stratified observation table
- * to separate the short prefixes by counter value.
+ * The implementation is based p, the unpublished paper "Learning Visibly
+ * One-Counter Automata" by D. Neider and C. Löding (2010).
+ * 
+ * The learner works over a pushdown alphabet, which means that the counter
+ * value of a word is solely dictated by the alphabet. In other words, the
+ * learner can compute the counter value of a given word without having to ask a
+ * query.
+ * 
+ * The learner uses a stratified table to store the observations. That is, there
+ * is one table by counter value between zero and the counter limit. See
+ * {@link StratifiedObservationTableWithCounterValues} for more information.
  * 
  * @param <I> Input parameter type
  * @author Gaëtan Staquet
@@ -50,9 +51,9 @@ public class LStarVCA<I>
     private final MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle;
     private final EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> restrictedAutomatonEquivalenceOracle;
 
-    private final ObservationTableWithCounterValuesVCA<I> table;
+    private final StratifiedObservationTableWithCounterValues<I, Boolean> table;
 
-    private AutomatonWithCounterValues<?, I, VCA<?, I>> hypothesis;
+    private DefaultAutomatonWithCounterValuesVCA<I> hypothesis;
     private int counterLimit;
 
     public LStarVCA(MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle,
@@ -62,7 +63,8 @@ public class LStarVCA<I>
         this.restrictedAutomatonEquivalenceOracle = restrictedAutomatonEquivalenceOracle;
         this.alphabet = alphabet;
         counterLimit = 0;
-        this.table = new ObservationTableWithCounterValuesVCA<>(alphabet);
+        this.table = new StratifiedObservationTableWithCounterValues<>(alphabet);
+        this.hypothesis = new DefaultAutomatonWithCounterValuesVCA<>(alphabet);
     }
 
     @Override
@@ -77,49 +79,51 @@ public class LStarVCA<I>
 
     @Override
     public Collection<VCA<?, I>> getHypothesisModels() {
-        // @formatter:off
-        List<VCA<?, I>> goodRocas = hypothesis.toAutomata(counterLimit).stream()
-            .filter(vca -> isConsistent(vca))
-            .collect(Collectors.toList());
-        // @formatter:on
-        return goodRocas;
-    }
-
-    private boolean isConsistent(VCA<?, I> vca) {
-        // We want the ROCA to be correct with regards to the information stored in the
-        // table.
-        // That is, the ROCA and the table must agree on the acceptance of the words.
-        for (Row<I> row : table.getAllRows()) {
-            Word<I> prefix = row.getLabel();
-            List<OutputAndCounterValue<Boolean>> rowContent = table.fullRowContents(row);
-            for (int i = 0; i < table.numberOfSuffixes(); i++) {
-                Word<I> word = prefix.concat(table.getSuffix(i));
-                if (vca.accepts(word) != rowContent.get(i).getOutput()) {
-                    return false;
-                }
-            }
-        }
-        return true;
+        return hypothesis.toAutomata(counterLimit);
     }
 
     @Override
     public void startLearning() {
-        final List<Word<I>> initialPrefixes = initialPrefixes();
-        final List<Word<I>> initialSuffixes = initialSuffixes();
+        final List<List<Word<I>>> initialPrefixes = initialPrefixes();
+        final List<List<Word<I>>> initialSuffixes = initialSuffixes();
 
         List<List<Row<I>>> unclosed = table.initialize(initialPrefixes, initialSuffixes, membershipOracle);
         completeConsistentTable(unclosed, table.isInitialConsistencyCheckRequired());
 
         learnDFA();
-        updateHypothesis();
     }
 
-    private List<Word<I>> initialPrefixes() {
-        return Collections.singletonList(Word.epsilon());
+    private List<List<Word<I>>> initialPrefixes() {
+        return Collections.singletonList(Collections.singletonList(Word.epsilon()));
     }
 
-    private List<Word<I>> initialSuffixes() {
-        return Collections.singletonList(Word.epsilon());
+    private List<List<Word<I>>> initialSuffixes() {
+        return Collections.singletonList(Collections.singletonList(Word.epsilon()));
+    }
+
+    private void processCounterExample(Word<I> counterexample, List<List<? extends Word<I>>> prefixes,
+            List<List<? extends Word<I>>> suffixes) {
+        Map<Integer, List<Word<I>>> prefixesByCounterValue = new HashMap<>();
+        Map<Integer, List<Word<I>>> suffixesByCounterValue = new HashMap<>();
+
+        List<Word<I>> prefixesList = counterexample.prefixes(false);
+        List<Word<I>> suffixesList = counterexample.suffixes(true);
+        for (int i = 0; i < prefixesList.size(); i++) {
+            Word<I> prefix = prefixesList.get(i);
+            Word<I> suffix = suffixesList.get(i);
+
+            int counterValue = OCAUtil.computeCounterValue(prefix, alphabet);
+            if (!prefixesByCounterValue.containsKey(counterValue)) {
+                prefixesByCounterValue.put(counterValue, new ArrayList<>());
+                suffixesByCounterValue.put(counterValue, new ArrayList<>());
+            }
+
+            prefixesByCounterValue.get(counterValue).add(prefix);
+            suffixesByCounterValue.get(counterValue).add(suffix);
+        }
+
+        prefixes.addAll(prefixesByCounterValue.values());
+        suffixes.addAll(suffixesByCounterValue.values());
     }
 
     @Override
@@ -129,21 +133,21 @@ public class LStarVCA<I>
         }
 
         // 1. We compute the new counter limit
-        counterLimit = computeMaximalCounterValue(ceQuery.getInput(), alphabet);
+        counterLimit = OCAUtil.computeMaximalCounterValue(ceQuery.getInput(), alphabet);
 
         // 2. We increase the counter limit in the oracles
         membershipOracle.setCounterLimit(counterLimit);
         restrictedAutomatonEquivalenceOracle.setCounterLimit(counterLimit);
 
         // 3. We refine the table
-        List<List<Row<I>>> unclosed = table.increaseCounterLimit(counterLimit, membershipOracle);
-        completeConsistentTable(unclosed, true);
-        unclosed = ObservationTableCEXHandlers.handleClassicLStar(ceQuery, table, membershipOracle);
+        List<List<? extends Word<I>>> prefixes = new ArrayList<>();
+        List<List<? extends Word<I>>> suffixes = new ArrayList<>();
+        processCounterExample(ceQuery.getInput(), prefixes, suffixes);
+        List<List<Row<I>>> unclosed = table.increaseCounterLimit(counterLimit, prefixes, suffixes, membershipOracle);
         completeConsistentTable(unclosed, true);
 
         // 4. We learn the DFA up to the counter value
         learnDFA();
-        updateHypothesis();
 
         return true;
     }
@@ -153,39 +157,65 @@ public class LStarVCA<I>
             throw new IllegalStateException("Cannot update internal hypothesis: not initialized");
         }
 
-        final DefaultAutomatonWithCounterValuesVCA<I> automaton = new DefaultAutomatonWithCounterValuesVCA<>(alphabet);
-        final Set<Row<I>> representativeRows = table.getRepresentativeRows();
+        List<Map<Integer, StateInfo<DefaultAutomatonWithCounterValuesState, I>>> stateInfosByCounterValue = new ArrayList<>();
+        hypothesis = new DefaultAutomatonWithCounterValuesVCA<>(alphabet);
 
-        Map<Integer, DefaultAutomatonWithCounterValuesState> idToState = new HashMap<>();
-        for (Row<I> row : representativeRows) {
-            boolean initial = row.getLabel() == Word.epsilon();
-            OutputAndCounterValue<Boolean> cellContents = table.fullCellContents(row, 0);
-            boolean accepting = cellContents.getOutput();
-            int counterValue = cellContents.getCounterValue();
-
-            DefaultAutomatonWithCounterValuesState state;
-            if (initial) {
-                state = automaton.addInitialState(accepting, counterValue);
-            } else {
-                state = automaton.addState(accepting, counterValue);
-            }
-
-            idToState.put(row.getRowId(), state);
+        for (int i = 0; i <= counterLimit; i++) {
+            stateInfosByCounterValue.add(new HashMap<>());
         }
 
-        for (Row<I> row : representativeRows) {
-            DefaultAutomatonWithCounterValuesState start = idToState.get(row.getRowId());
-            for (int i = 0; i < alphabet.size(); i++) {
-                Row<I> targetRow = row.getSuccessor(i);
-                Row<I> targetRepresentative = table.getRepresentativeForEquivalenceClass(targetRow);
-                if (targetRepresentative != null) {
-                    DefaultAutomatonWithCounterValuesState target = idToState.get(targetRepresentative.getRowId());
-                    automaton.setTransition(start, alphabet.getSymbol(i), target);
+        for (int counterValue = 0; counterValue <= counterLimit; counterValue++) {
+            Map<Integer, StateInfo<DefaultAutomatonWithCounterValuesState, I>> stateInfos = stateInfosByCounterValue
+                    .get(counterValue);
+
+            for (Row<I> sp : table.getShortPrefixRows(counterValue)) {
+                int id = sp.getRowContentId();
+                StateInfo<DefaultAutomatonWithCounterValuesState, I> info = stateInfos.getOrDefault(id, null);
+                boolean acceptance = false;
+                if (counterValue == 0 && table.cellContents(sp, 0)) {
+                    acceptance = true;
+                }
+                if (info != null) {
+                    if (info.getRow() == sp) {
+                        hypothesis.setStateAcceptance(info.getState(), acceptance);
+                    }
+                } else {
+                    DefaultAutomatonWithCounterValuesState state;
+                    if (sp.getLabel().equals(Word.epsilon())) {
+                        state = hypothesis.addInitialState(acceptance, counterValue);
+                    } else {
+                        state = hypothesis.addState(acceptance, counterValue);
+                    }
+
+                    stateInfos.put(id, new StateInfo<>(sp, state));
+                }
+            }
+
+        }
+
+        for (int counterValue = 0; counterValue <= counterLimit; counterValue++) {
+            Map<Integer, StateInfo<DefaultAutomatonWithCounterValuesState, I>> stateInfos = stateInfosByCounterValue
+                    .get(counterValue);
+            for (StateInfo<DefaultAutomatonWithCounterValuesState, I> info : stateInfos.values()) {
+                Row<I> sp = info.getRow();
+                assert counterValue == table.getCounterValueOfRow(sp);
+                DefaultAutomatonWithCounterValuesState state = info.getState();
+                assert state != null;
+
+                for (int j = 0; j < alphabet.size(); j++) {
+                    I input = alphabet.getSymbol(j);
+                    Row<I> successor = sp.getSuccessor(j);
+                    if (successor != null) {
+                        int successorId = successor.getRowContentId();
+                        int successorCv = table.getCounterValueOfRow(successor);
+                        assert successorCv == (counterValue + OCAUtil.counterOperation(input, alphabet));
+                        DefaultAutomatonWithCounterValuesState successorState = stateInfosByCounterValue
+                                .get(successorCv).get(successorId).getState();
+                        hypothesis.setTransition(state, input, successorState);
+                    }
                 }
             }
         }
-
-        hypothesis = automaton;
     }
 
     private void learnDFA() {
@@ -199,7 +229,7 @@ public class LStarVCA<I>
 
             int oldDistinctRows = table.numberOfDistinctRows();
 
-            List<List<Row<I>>> unclosed = ObservationTableCEXHandlers.handleClassicLStar(ce, table, membershipOracle);
+            List<List<Row<I>>> unclosed = table.addShortPrefixes(ce.getInput().prefixes(false), membershipOracle);
             completeConsistentTable(unclosed, true);
             assert table.numberOfDistinctRows() > oldDistinctRows
                     : "Nothing was learnt during the last iteration for DFA";
@@ -207,7 +237,7 @@ public class LStarVCA<I>
     }
 
     @Override
-    public ObservationTableWithCounterValuesVCA<I> getObservationTable() {
+    public StratifiedObservationTableWithCounterValues<I, Boolean> getObservationTable() {
         return table;
     }
 
@@ -216,8 +246,25 @@ public class LStarVCA<I>
         return Collections.unmodifiableList(table.getSuffixes());
     }
 
+    /**
+     * This function should not be called. See the other addGlobalSuffixes.
+     */
     @Override
     public boolean addGlobalSuffixes(Collection<? extends Word<I>> globalSuffixes) {
+        throw new UnsupportedOperationException(
+                "To add global suffixes in L* for VCA, counter values must be provided. See the other addGlobalSuffixes method");
+    }
+
+    /**
+     * Adds global suffixes in the learner.
+     * 
+     * The suffixes must be grouped by the counter value of the table in which they
+     * must be added.
+     * 
+     * @param globalSuffixes Global suffixes
+     * @return Whether new distinct rows were identified
+     */
+    public boolean addGlobalSuffixes(Map<Integer, List<? extends Word<I>>> globalSuffixes) {
         List<List<Row<I>>> unclosed = table.addSuffixes(globalSuffixes, membershipOracle);
         if (unclosed.isEmpty()) {
             return false;
@@ -227,11 +274,11 @@ public class LStarVCA<I>
 
     @Override
     public void addAlphabetSymbol(I symbol) {
-        if (!this.alphabet.containsSymbol(symbol)) {
-            Alphabets.toGrowingAlphabetOrThrowException(this.alphabet).addSymbol(symbol);
+        if (!alphabet.containsSymbol(symbol)) {
+            Alphabets.toGrowingAlphabetOrThrowException(alphabet).addSymbol(symbol);
         }
 
-        final List<List<Row<I>>> unclosed = this.table.addAlphabetSymbol(symbol, membershipOracle);
+        final List<List<Row<I>>> unclosed = table.addAlphabetSymbol(symbol, membershipOracle);
         completeConsistentTable(unclosed, true);
     }
 
@@ -251,8 +298,10 @@ public class LStarVCA<I>
                 do {
                     inconsistency = table.findInconsistency();
                     if (inconsistency != null) {
-                        Word<I> newSuffix = analyzeInconsistency(inconsistency);
-                        unclosedIter = table.addSuffix(newSuffix, membershipOracle);
+                        int counterValue = OCAUtil.computeCounterValue(inconsistency.getFirstRow().getLabel(),
+                                alphabet);
+                        Word<I> newSuffix = analyzeInconsistency(inconsistency, counterValue);
+                        unclosedIter = table.addSuffix(newSuffix, counterValue, membershipOracle);
                     }
                 } while (unclosedIter.isEmpty() && inconsistency != null);
             }
@@ -273,26 +322,45 @@ public class LStarVCA<I>
         return closingRows;
     }
 
-    private Word<I> analyzeInconsistency(Inconsistency<I> inconsistency) {
+    private Word<I> analyzeInconsistency(Inconsistency<I> inconsistency, int counterValueOfFirstRow) {
         int inputIdx = alphabet.getSymbolIndex(inconsistency.getSymbol());
+        I sym = alphabet.getSymbol(inputIdx);
+        int counterValue = counterValueOfFirstRow + OCAUtil.counterOperation(sym, alphabet);
 
         Row<I> successorRow1 = inconsistency.getFirstRow().getSuccessor(inputIdx);
         Row<I> successorRow2 = inconsistency.getSecondRow().getSuccessor(inputIdx);
 
-        int numSuffixes = table.getSuffixes().size();
+        List<Word<I>> suffixes = table.getSuffixes(counterValue);
 
-        for (int i = 0; i < numSuffixes; i++) {
-            OutputAndCounterValue<Boolean> val1 = table.fullCellContents(successorRow1, i);
-            OutputAndCounterValue<Boolean> val2 = table.fullCellContents(successorRow2, i);
-            if (!Objects.equals(val1, val2)) {
-                I sym = alphabet.getSymbol(inputIdx);
-                Word<I> suffix = table.getSuffixes().get(i);
-                if (!table.getSuffixes().contains(suffix.prepend(sym))) {
+        for (int i = 0; i < suffixes.size(); i++) {
+            boolean val1 = table.cellContents(successorRow1, i);
+            boolean val2 = table.cellContents(successorRow2, i);
+            if (val1 != val2) {
+                Word<I> suffix = suffixes.get(i);
+                if (!suffixes.contains(suffix.prepend(sym))) {
                     return suffix.prepend(sym);
                 }
             }
         }
 
         throw new IllegalArgumentException("Bogus inconsistency");
+    }
+
+    private static class StateInfo<S, I> {
+        private final Row<I> row;
+        private final S state;
+
+        StateInfo(Row<I> row, S state) {
+            this.row = row;
+            this.state = state;
+        }
+
+        public Row<I> getRow() {
+            return row;
+        }
+
+        public S getState() {
+            return state;
+        }
     }
 }

@@ -1,7 +1,5 @@
 package de.learnlib.algorithms.lstar.vca;
 
-import static de.learnlib.algorithms.lstar.vca.VCALearningUtils.computeMaximalCounterValue;
-
 import java.util.Collection;
 
 import org.testng.Assert;
@@ -46,14 +44,19 @@ public class LStarVCATests {
         while (maxRounds-- > 0) {
             final Collection<VCA<?, I>> hypotheses = learner.getHypothesisModels();
             DefaultQuery<I, Boolean> counterexample = null;
+            int maximalCounterValue = learner.getCounterLimit();
 
             for (VCA<?, I> hypothesis : hypotheses) {
                 DefaultQuery<I, Boolean> ce = eqOracle.findCounterExample(hypothesis, alphabet);
 
                 if (ce == null) {
                     return hypothesis;
-                } else if (computeMaximalCounterValue(ce.getInput(), alphabet) > learner.getCounterLimit()) {
+                }
+
+                int counterValue = OCAUtil.computeMaximalCounterValue(ce.getInput(), alphabet);
+                if (counterValue > maximalCounterValue) {
                     counterexample = ce;
+                    maximalCounterValue = counterValue;
                 }
             }
 
@@ -74,11 +77,11 @@ public class LStarVCATests {
         return null;
     }
 
-    @Test(invocationCount = 10, timeOut = 10000, successPercentage = 70)
+    @Test(invocationCount = 10, timeOut = 10000)
     public void testRandomVCA() {
         VPDAlphabet<Character> alphabet = new DefaultVPDAlphabet<>(Alphabets.characters('a', 'b'),
                 Alphabets.characters('c', 'd'), Alphabets.characters('e', 'f'));
-        ExampleRandomVCA<Character> example = new ExampleRandomVCA<>(alphabet, 2, 1, 0.5);
+        ExampleRandomVCA<Character> example = new ExampleRandomVCA<>(alphabet, 5, 2, 0.5);
 
         runTest(example.getReferenceAutomaton(), alphabet);
     }

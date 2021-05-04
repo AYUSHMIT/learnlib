@@ -26,6 +26,8 @@ import java.util.function.Function;
 import de.learnlib.datastructure.observationtable.reader.ObservationTableReader;
 import de.learnlib.datastructure.observationtable.writer.ObservationTableHTMLWriter;
 import de.learnlib.datastructure.observationtable.writer.ObservationTableWriter;
+import de.learnlib.datastructure.observationtable.writer.StratifiedObservationTableHTMLWriter;
+import de.learnlib.datastructure.observationtable.writer.StratifiedObservationTableWriter;
 import net.automatalib.commons.util.IOUtil;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
@@ -59,6 +61,12 @@ public final class OTUtils {
         return sb.toString();
     }
 
+    public static <I, D> String toString(StratifiedObservationTable<I, D> table, StratifiedObservationTableWriter<I, D> writer) {
+        StringBuilder sb = new StringBuilder();
+        writer.write(table, sb);
+        return sb.toString();
+    }
+
     public static <I, D> ObservationTable<I, D> fromString(String source,
                                                            Alphabet<I> alphabet,
                                                            ObservationTableReader<I, D> reader) {
@@ -66,6 +74,10 @@ public final class OTUtils {
     }
 
     public static <I, D> void writeHTMLToFile(ObservationTable<I, D> table, File file) throws IOException {
+        writeHTMLToFile(table, file, Objects::toString, Objects::toString);
+    }
+
+    public static <I, D> void writeHTMLToFile(StratifiedObservationTable<I, D> table, File file) throws IOException {
         writeHTMLToFile(table, file, Objects::toString, Objects::toString);
     }
 
@@ -82,11 +94,27 @@ public final class OTUtils {
         }
     }
 
+    public static <I, D> void writeHTMLToFile(StratifiedObservationTable<I, D> table,
+                                              File file,
+                                              Function<? super Word<? extends I>, ? extends String> wordToString,
+                                              Function<? super D, ? extends String> outputToString) throws IOException {
+        try (Writer w = IOUtil.asBufferedUTF8Writer(file)) {
+            w.write(HTML_FILE_HEADER);
+            StratifiedObservationTableHTMLWriter<I, D> otWriter = new StratifiedObservationTableHTMLWriter<>(wordToString, outputToString);
+            otWriter.write(table, w);
+            w.write(HTML_FILE_FOOTER);
+        }
+    }
+
     /**
      * Convenience method for {@link #displayHTMLInBrowser(ObservationTable, Function, Function)} that uses {@link
      * Object#toString()} to render words and outputs of the observation table.
      */
     public static <I, D> void displayHTMLInBrowser(ObservationTable<I, D> table) throws IOException {
+        displayHTMLInBrowser(table, Objects::toString, Objects::toString);
+    }
+
+    public static <I, D> void displayHTMLInBrowser(StratifiedObservationTable<I, D> table) throws IOException {
         displayHTMLInBrowser(table, Objects::toString, Objects::toString);
     }
 
@@ -131,6 +159,16 @@ public final class OTUtils {
         Desktop desktop = Desktop.getDesktop();
         // We use browse() instead of open() because, e.g., web developers may have
         // an HTML editor set up as their default application to open HTML files
+        desktop.browse(tempFile.toURI());
+    }
+
+    public static <I, D> void displayHTMLInBrowser(StratifiedObservationTable<I, D> table,
+                                                   Function<? super Word<? extends I>, ? extends String> wordToString,
+                                                   Function<? super D, ? extends String> outputToString)
+            throws IOException {
+        File tempFile = File.createTempFile("learnlib-sot", ".html");
+        writeHTMLToFile(table, tempFile, wordToString, outputToString);
+        Desktop desktop = Desktop.getDesktop();
         desktop.browse(tempFile.toURI());
     }
 }

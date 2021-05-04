@@ -54,10 +54,6 @@ limitations under the License.
             <groupId>de.learnlib</groupId>
             <artifactId>learnlib-lstar</artifactId>
         </dependency>
-        <dependency>
-            <groupId>de.learnlib</groupId>
-            <artifactId>learnlib-lstar-roca</artifactId>
-        </dependency>
 
         <!-- external -->
         <dependency>
