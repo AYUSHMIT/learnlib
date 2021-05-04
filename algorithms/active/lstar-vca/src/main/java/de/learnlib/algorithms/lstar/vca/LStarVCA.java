@@ -37,7 +37,8 @@ import net.automatalib.words.impl.Alphabets;
  * query.
  * 
  * The learner uses a stratified table to store the observations. That is, there
- * is one table by counter value between zero and the counter limit. See
+ * is one table by counter value between zero and the counter limit. Each table
+ * has its own sets of prefixes and suffixes such that the. See
  * {@link StratifiedObservationTableWithCounterValues} for more information.
  * 
  * @param <I> Input parameter type

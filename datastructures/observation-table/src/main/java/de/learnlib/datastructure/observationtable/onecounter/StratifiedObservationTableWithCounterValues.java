@@ -27,8 +27,7 @@ import net.automatalib.words.impl.Alphabets;
  * counter value of the prefixes.
  * 
  * There is a layer for each counter value between zero and the counter limit.
- * Each layer has its own sets of prefixes and suffixes such that the
- * concatenation of a prefix and a suffix has a counter value of zero.
+ * Each layer has its own sets of prefixes and suffixes.
  * 
  * Two rows are equivalent iff both prefixes have exactly the same counter value
  * and contents.
