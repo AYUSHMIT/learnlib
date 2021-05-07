@@ -7,19 +7,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 
-import de.learnlib.algorithms.lstar.ce.ObservationTableCEXHandlers;
+import de.learnlib.api.algorithm.feature.GlobalSuffixLearner;
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.datastructure.observationtable.Inconsistency;
 import de.learnlib.datastructure.observationtable.OTLearner;
 import de.learnlib.datastructure.observationtable.Row;
-import de.learnlib.datastructure.observationtable.AbstractObservationTableWithCounterValues.OutputAndCounterValue;
+import de.learnlib.datastructure.observationtable.onecounter.PairCounterValueOutput;
 import de.learnlib.util.MQUtil;
-import de.learnlib.api.algorithm.feature.GlobalSuffixLearner;
 import net.automatalib.SupportsGrowingAlphabet;
 import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.oca.automatoncountervalues.AutomatonWithCounterValues;
@@ -46,7 +44,7 @@ import net.automatalib.words.impl.Alphabets;
  * 
  * It is important that every provided counterexample for refinements is in the
  * target language. Otherwise, the observation table will not work properly and
- * the learning process will crash.
+ * the learning process will not behave as expected.
  * 
  * @author Gaëtan Staquet
  */
@@ -60,7 +58,7 @@ public final class LStarROCA<I>
     private final EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> restrictedAutomatonEquivalenceOracle;
 
     private final ObservationTableWithCounterValuesROCA<I> table;
-    private AutomatonWithCounterValues<?, I, ROCA<?, I>> hypothesis;
+    private DefaultAutomatonWithCounterValuesROCA<I> hypothesis;
     private int counterLimit;
 
     public LStarROCA(MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle,
@@ -109,7 +107,7 @@ public final class LStarROCA<I>
         // That is, the ROCA and the table must agree on the acceptance of the words.
         for (Row<I> row : table.getAllRows()) {
             Word<I> prefix = row.getLabel();
-            List<OutputAndCounterValue<Boolean>> rowContent = table.fullRowContents(row);
+            List<PairCounterValueOutput<Boolean>> rowContent = table.fullRowContents(row);
             for (int i = 0; i < table.numberOfSuffixes(); i++) {
                 Word<I> word = prefix.concat(table.getSuffix(i));
                 if (roca.accepts(word) != rowContent.get(i).getOutput()) {
@@ -159,15 +157,14 @@ public final class LStarROCA<I>
         } else if (!MQUtil.isCounterexample(ceQuery, hypothesis)) {
             return false;
         } else {
-            unclosed = table.increaseCounterLimit(counterLimit, membershipOracle);
-            completeConsistentTable(unclosed, true);
-            unclosed = ObservationTableCEXHandlers.handleClassicLStar(ceQuery, table, membershipOracle);
+            Word<I> counterexample = ceQuery.getInput();
+            unclosed = table.increaseCounterLimit(counterLimit, counterexample.prefixes(false), Collections.emptyList(),
+                    membershipOracle);
             completeConsistentTable(unclosed, true);
         }
 
         // 4. We learn the DFA up to the counter value
         learnDFA();
-        updateHypothesis();
 
         return true;
     }
@@ -187,14 +184,19 @@ public final class LStarROCA<I>
             int oldDistinctRows = table.numberOfDistinctRows();
             int oldSuffixes = table.numberOfSuffixes();
 
-            // Since we want that for all cells in the table with label u, u is in the prefix of the target language, we can not add the prefixes of the counterexample as representatives.
-            // Indeed, we can not be sure that the provided counterexample should be accepted.
+            // Since we want that for all cells in the table with label u, u is in the
+            // prefix of the target language, we can not add the prefixes of the
+            // counterexample as representatives.
+            // Indeed, we can not be sure that the provided counterexample should be
+            // accepted.
             // Therefore, we instead add the suffixes as separators.
             List<Word<I>> suffixes = ce.getInput().suffixes(false);
             List<List<Row<I>>> unclosed = table.addSuffixes(suffixes, membershipOracle);
 
             completeConsistentTable(unclosed, true);
-            assert table.numberOfDistinctRows() > oldDistinctRows || table.numberOfSuffixes() > oldSuffixes : "Nothing was learnt during the last iteration for DFA";
+
+            assert table.numberOfDistinctRows() > oldDistinctRows || table.numberOfSuffixes() > oldSuffixes
+                    : "Nothing was learnt during the last iteration for DFA";
         }
     }
 
@@ -254,8 +256,8 @@ public final class LStarROCA<I>
         int numSuffixes = table.getSuffixes().size();
 
         for (int i = 0; i < numSuffixes; i++) {
-            OutputAndCounterValue<Boolean> val1 = table.fullCellContents(successorRow1, i);
-            OutputAndCounterValue<Boolean> val2 = table.fullCellContents(successorRow2, i);
+            PairCounterValueOutput<Boolean> val1 = table.fullCellContents(successorRow1, i);
+            PairCounterValueOutput<Boolean> val2 = table.fullCellContents(successorRow2, i);
             if (!Objects.equals(val1, val2)) {
                 I sym = alphabet.getSymbol(inputIdx);
                 Word<I> suffix = table.getSuffixes().get(i);
@@ -298,43 +300,68 @@ public final class LStarROCA<I>
     }
 
     private void updateHypothesis() {
-        if (!table.isInitialized()) {
-            throw new IllegalStateException("Cannot update internal hypothesis: not initialized");
-        }
+        assert table.isInitialized();
 
-        final DefaultAutomatonWithCounterValuesROCA<I> automaton = new DefaultAutomatonWithCounterValuesROCA<>(alphabet);
-        final Set<Row<I>> representativeRows = table.getRepresentativeRows();
+        Map<Integer, StateInfo<DefaultAutomatonWithCounterValuesState, I>> stateInfos = new HashMap<>();
+        hypothesis = new DefaultAutomatonWithCounterValuesROCA<>(alphabet);
 
-        Map<Integer, DefaultAutomatonWithCounterValuesState> idToState = new HashMap<>();
-        for (Row<I> row : representativeRows) {
-            boolean initial = row.getLabel() == Word.epsilon();
-            OutputAndCounterValue<Boolean> cellContents = table.fullCellContents(row, 0);
-            boolean accepting = cellContents.getOutput();
-            int counterValue = cellContents.getCounterValue();
+        for (Row<I> sp : table.getCanonicalRows()) {
+            int id = sp.getRowContentId();
+            StateInfo<DefaultAutomatonWithCounterValuesState, I> info = stateInfos.getOrDefault(id, null);
+            PairCounterValueOutput<Boolean> cell = table.fullCellContents(sp, 0);
+            boolean acceptance = cell.getOutput();
+            int counterValue = cell.getCounterValue();
 
-            DefaultAutomatonWithCounterValuesState state;
-            if (initial) {
-                state = automaton.addInitialState(accepting, counterValue);
+            if (info != null) {
+                if (info.getRow() == sp) {
+                    hypothesis.setStateAcceptance(info.getState(), acceptance);
+                }
             } else {
-                state = automaton.addState(accepting, counterValue);
-            }
+                DefaultAutomatonWithCounterValuesState state;
+                if (sp.getLabel().equals(Word.epsilon())) {
+                    state = hypothesis.addInitialState(acceptance, 0);
+                } else {
+                    state = hypothesis.addState(acceptance, counterValue);
+                }
 
-            idToState.put(row.getRowId(), state);
+                stateInfos.put(id, new StateInfo<>(sp, state));
+            }
         }
 
-        for (Row<I> row : representativeRows) {
-            DefaultAutomatonWithCounterValuesState start = idToState.get(row.getRowId());
+        for (StateInfo<DefaultAutomatonWithCounterValuesState, I> info : stateInfos.values()) {
+            Row<I> sp = info.getRow();
+            DefaultAutomatonWithCounterValuesState state = info.getState();
+
             for (int i = 0; i < alphabet.size(); i++) {
-                Row<I> targetRow = row.getSuccessor(i);
-                Row<I> targetRepresentative = table.getRepresentativeForEquivalenceClass(targetRow);
-                if (targetRepresentative != null) {
-                    DefaultAutomatonWithCounterValuesState target = idToState
-                            .get(targetRepresentative.getRowId());
-                    automaton.setTransition(start, alphabet.getSymbol(i), target);
+                I input = alphabet.getSymbol(i);
+                Row<I> successor = sp.getSuccessor(i);
+                if (successor != null) {
+                    Row<I> canSuccessor = table.getCanonicalRow(successor);
+                    if (canSuccessor != null) {
+                        int successorId = canSuccessor.getRowContentId();
+                        DefaultAutomatonWithCounterValuesState successorState = stateInfos.get(successorId).getState();
+                        hypothesis.setTransition(state, input, successorState);
+                    }
                 }
             }
         }
+    }
 
-        hypothesis = automaton;
+    private static class StateInfo<S, I> {
+        private final Row<I> row;
+        private final S state;
+
+        StateInfo(Row<I> row, S state) {
+            this.row = row;
+            this.state = state;
+        }
+
+        public Row<I> getRow() {
+            return row;
+        }
+
+        public S getState() {
+            return state;
+        }
     }
 }

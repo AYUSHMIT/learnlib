@@ -15,7 +15,7 @@ import de.learnlib.api.oracle.EquivalenceOracle.RestrictedAutomatonEquivalenceOr
 import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.oracle.MembershipOracle.RestrictedAutomatonMembershipOracle;
 import de.learnlib.api.query.DefaultQuery;
-import de.learnlib.datastructure.observationtable.AbstractObservationTableWithCounterValues.OutputAndCounterValue;
+import de.learnlib.datastructure.observationtable.onecounter.PairCounterValueOutput;
 import de.learnlib.datastructure.observationtable.Row;
 import de.learnlib.examples.dfa.ExamplePaulAndMary;
 import de.learnlib.examples.roca.ExampleRandomROCA;
@@ -76,56 +76,8 @@ public class LStarROCATest {
             final boolean refined = learner.refineHypothesis(counterexample);
 
             Assert.assertTrue(refined);
-
-            checkEverything(learner.getObservationTable(), membershipOracle, counterValueOracle);
         }
         return null;
-    }
-
-    private static <I> void checkEverything(ObservationTableWithCounterValuesROCA<I> table,
-            MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle,
-            MembershipOracle.CounterValueOracle<I> counterValueOracle) {
-        for (Row<I> row : table.getLongPrefixRows()) {
-            if (!table.isBinContents(table.fullRowContents(row))) {
-                Assert.assertNotNull(table.getRepresentativeForEquivalenceClass(row));
-            }
-        }
-
-        Set<Integer> rowContentsSet = new HashSet<>();
-        List<Word<I>> pref = new ArrayList<>();
-        for (Row<I> row : table.getAllRows()) {
-            List<OutputAndCounterValue<Boolean>> contents = table.fullRowContents(row);
-            rowContentsSet.add(row.getRowContentId());
-
-            for (int i = 0; i < table.numberOfSuffixes(); i++) {
-                OutputAndCounterValue<Boolean> cell = contents.get(i);
-                Word<I> word = row.getLabel().concat(table.getSuffix(i));
-                Boolean output = membershipOracle.answerQuery(word);
-                Assert.assertEquals(output, cell.getOutput());
-                if (table.isAccepted(cell)) {
-                    for (Word<I> prefix : word.prefixes(false)) {
-                        pref.add(prefix);
-                    }
-                }
-            }
-
-            for (Row<I> row2 : table.getAllRows()) {
-                if (table.fullRowContents(row).equals(table.fullRowContents(row2))) {
-                    Assert.assertEquals(row.getRowContentId(), row2.getRowContentId());
-                } else {
-                    Assert.assertNotEquals(row.getRowContentId(), row2.getRowContentId());
-                }
-            }
-        }
-
-        for (Row<I> row : table.getAllRows()) {
-            for (int i = 0; i < table.numberOfSuffixes(); i++) {
-                Word<I> word = row.getLabel().concat(table.getSuffix(i));
-                Assert.assertEquals(table.fullCellContents(row, i).getCounterValue() != -1, pref.contains(word));
-            }
-        }
-
-        Assert.assertEquals(rowContentsSet.size(), table.numberOfDistinctRows());
     }
 
     private <I> void launch(ROCA<?, I> roca, Alphabet<I> alphabet) {
@@ -167,7 +119,7 @@ public class LStarROCATest {
 
     // successPercentage is used because it can happen than some ROCAs take too long
     // to learn
-    @Test(invocationCount = 10, timeOut = 100000, successPercentage = 70)
+    @Test(invocationCount = 10, timeOut = 1000)
     public void testLearningRandomROCA() {
         Alphabet<Character> alphabet = Alphabets.characters('a', 'b');
         int size = 2;
