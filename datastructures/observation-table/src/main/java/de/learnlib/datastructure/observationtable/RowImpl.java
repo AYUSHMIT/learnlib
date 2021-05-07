@@ -119,10 +119,6 @@ final class RowImpl<I> implements Row<I> {
         return lpIndex == -1;
     }
 
-    boolean hasContents() {
-        return rowContentId != -1;
-    }
-
     int getLpIndex() {
         return lpIndex;
     }

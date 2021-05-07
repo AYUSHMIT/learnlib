@@ -12,7 +12,7 @@ import net.automatalib.words.Word;
 final class RowImpl<I> implements Row<I> {
     private final Word<I> label;
     private final int rowId;
-    private final int counterValue;
+    private int counterValue;
 
     private int rowContentId = -1;
     private int lpIndex;
@@ -51,12 +51,16 @@ final class RowImpl<I> implements Row<I> {
     }
 
     @Override
-    public Row<I> getSuccessor(int inputIdx) {
+    public RowImpl<I> getSuccessor(int inputIdx) {
         return successors.array[inputIdx];
     }
 
     int getCounterValue() {
         return counterValue;
+    }
+
+    public void setCounterValue(int counterValue) {
+        this.counterValue = counterValue;
     }
 
     void makeShort(int initialAlphabetSize) {
@@ -73,10 +77,6 @@ final class RowImpl<I> implements Row<I> {
 
     void setRowContentId(int id) {
         rowContentId = id;
-    }
-
-    boolean hasContents() {
-        return rowContentId != -1;
     }
 
     void setLpIndex(int lpIndex) {

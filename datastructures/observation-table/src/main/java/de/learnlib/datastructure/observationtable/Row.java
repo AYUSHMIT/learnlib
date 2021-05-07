@@ -52,6 +52,17 @@ public interface Row<I> {
     int getRowContentId();
 
     /**
+     * Retrieves whether this row has contents.
+     * 
+     * This is a shortcut for {@code getRowContentId() != -1}.
+     * 
+     * @return {@code true} if the row has contents, {@code false} otherwise.
+     */
+    default boolean hasContents() {
+        return getRowContentId() != -1;
+    }
+
+    /**
      * Retrieves the label of this row.
      *
      * @return the label of this row
