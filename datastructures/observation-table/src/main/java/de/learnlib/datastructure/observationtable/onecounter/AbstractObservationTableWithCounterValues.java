@@ -454,6 +454,18 @@ public abstract class AbstractObservationTableWithCounterValues<I, D> implements
             RowImpl<I> row = shortPrefixRows.get(i);
             List<PairCounterValueOutput<D>> rowContents = temporarySpContents.get(i);
 
+            // If a call to processContentsMembershipQueries changed a counter value, we
+            // retrieve the new counter value
+            List<PairCounterValueOutput<D>> currentContents = fullRowContents(row);
+            for (int j = 0; j < numOldSuffixes; j++) {
+                int currentCounterValue = currentContents.get(j).getCounterValue();
+                int rowCounterValue = rowContents.get(j).getCounterValue();
+                if (currentCounterValue != rowCounterValue) {
+                    rowContents.set(j,
+                            new PairCounterValueOutput<>(rowContents.get(j).getOutput(), currentCounterValue));
+                }
+            }
+
             fillCounterValues(row, rowContents, numOldSuffixes);
             processContents(row, rowContents);
         }
@@ -461,6 +473,16 @@ public abstract class AbstractObservationTableWithCounterValues<I, D> implements
         for (int i = 0; i < longPrefixRows.size(); i++) {
             RowImpl<I> row = longPrefixRows.get(i);
             List<PairCounterValueOutput<D>> rowContents = temporaryLpContents.get(i);
+
+            // If a call to processContentsMembershipQueries changed a counter value, we
+            // retrieve the new counter value
+            List<PairCounterValueOutput<D>> currentContents = fullRowContents(row);
+            for (int j = 0; j < numOldSuffixes; j++) {
+                if (currentContents.get(j).getCounterValue() != rowContents.get(j).getCounterValue()) {
+                    rowContents.set(j, new PairCounterValueOutput<>(rowContents.get(j).getOutput(),
+                            currentContents.get(j).getCounterValue()));
+                }
+            }
 
             fillCounterValues(row, rowContents, numOldSuffixes);
             processContents(row, rowContents);
@@ -577,6 +599,10 @@ public abstract class AbstractObservationTableWithCounterValues<I, D> implements
         }
 
         // PASS B: counter values
+        // Note that we only iterate over the fresh rows.
+        // Moreover, the modifications from the calls to
+        // processContentsMembershipQueries only applied to the already existing rows.
+        // Thus, we do not have to worry about retrieving the new counter value
         for (int i = 0; i < freshSpRows.size(); i++) {
             RowImpl<I> row = freshSpRows.get(i);
             List<PairCounterValueOutput<D>> rowContents = temporarySpContents.get(i);
@@ -700,6 +726,17 @@ public abstract class AbstractObservationTableWithCounterValues<I, D> implements
             for (int i = 0; i < numLongPrefixes; i++) {
                 RowImpl<I> row = newLongPrefixes.get(i);
                 List<PairCounterValueOutput<D>> rowContents = temporaryContents.get(i);
+
+                // If a call to processContentsMembershipQueries changed a counter value, we
+                // retrieve the new counter value
+                List<PairCounterValueOutput<D>> currentContents = fullRowContents(row);
+                for (int j = 0; j < numSuffixes; j++) {
+                    if (currentContents.get(j).getCounterValue() != rowContents.get(j).getCounterValue()) {
+                        rowContents.set(j, new PairCounterValueOutput<>(rowContents.get(j).getOutput(),
+                                currentContents.get(j).getCounterValue()));
+                    }
+                }
+
                 fillCounterValues(row, rowContents, 0);
                 processContents(row, rowContents);
             }
@@ -800,6 +837,7 @@ public abstract class AbstractObservationTableWithCounterValues<I, D> implements
             final List<PairCounterValueOutput<D>> rowContents = new ArrayList<>(fullRowContents(r));
             fillCounterValues(r, rowContents, 0);
             processContents(r, rowContents);
+            r.setCounterValue(rowContents.get(0).getCounterValue());
         }
     }
 
@@ -849,11 +887,12 @@ public abstract class AbstractObservationTableWithCounterValues<I, D> implements
     }
 
     private void fillCounterValues(RowImpl<I> row, List<PairCounterValueOutput<D>> rowContents, int firstSuffixIndex) {
+        Word<I> prefix = row.getLabel();
         for (int i = firstSuffixIndex; i < rowContents.size(); i++) {
             PairCounterValueOutput<D> currentCell = rowContents.get(i);
             int counterValue = currentCell.getCounterValue();
-            if (shouldChangeCounterValue(row.getLabel(), suffixes.get(i), counterValue)) {
-                counterValue = getCounterValue(row.getLabel(), suffixes.get(i));
+            if (shouldChangeCounterValue(prefix, suffixes.get(i), counterValue)) {
+                counterValue = getCounterValue(prefix, suffixes.get(i));
                 PairCounterValueOutput<D> newCell = new PairCounterValueOutput<>(currentCell.getOutput(), counterValue);
                 rowContents.set(i, newCell);
             }
