@@ -15,6 +15,7 @@ import de.learnlib.datastructure.observationtable.Inconsistency;
 import de.learnlib.datastructure.observationtable.Row;
 import de.learnlib.datastructure.observationtable.onecounter.AbstractObservationTableWithCounterValues;
 import de.learnlib.datastructure.observationtable.onecounter.PairCounterValueOutput;
+import net.automatalib.util.tries.PrefixTrie;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
 
@@ -49,8 +50,7 @@ public final class ObservationTableWithCounterValuesROCA<I>
 
     private final MembershipOracle.CounterValueOracle<I> counterValueOracle;
 
-    // TODO: use a trie
-    private final Set<Word<I>> prefixOfL = new HashSet<>();
+    private final PrefixTrie<I> prefixOfL;
 
     private final List<Set<Integer>> approx = new ArrayList<>();
     private final Map<Set<Integer>, Integer> approxToApproxId = new HashMap<>();
@@ -62,6 +62,7 @@ public final class ObservationTableWithCounterValuesROCA<I>
             MembershipOracle.CounterValueOracle<I> counterValueOracle) {
         super(alphabet);
         this.counterValueOracle = counterValueOracle;
+        this.prefixOfL = new PrefixTrie<>(false, alphabet);
     }
 
     @Override
@@ -182,13 +183,12 @@ public final class ObservationTableWithCounterValuesROCA<I>
                 Word<I> suffix = getSuffix(i);
                 Word<I> word = prefix.concat(suffix);
                 for (Word<I> pref : word.prefixes(true)) {
-                    if (prefixOfL.add(pref)) {
+                    prefixOfL.add(pref);
+                    if (canChangeCounterValues) {
                         Row<I> r = getRow(pref);
-                        if (canChangeCounterValues && r != null) {
+                        if (r != null) {
                             updateCounterValues(r);
                         }
-                    } else {
-                        break;
                     }
                 }
             }
@@ -255,7 +255,6 @@ public final class ObservationTableWithCounterValuesROCA<I>
     }
 
     private boolean isCoAccessibleRow(Row<I> row) {
-        // TODO: wouldn't it be enough to test if row.getLabel() is in prefixOfL?
         List<PairCounterValueOutput<Boolean>> rowContents = fullRowContents(row);
         for (PairCounterValueOutput<Boolean> cell : rowContents) {
             if (cell.getCounterValue() != NO_COUNTER_VALUE) {
