@@ -1,10 +1,6 @@
 package de.learnlib.algorithms.lstar.roca;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -15,7 +11,6 @@ import de.learnlib.api.oracle.EquivalenceOracle.RestrictedAutomatonEquivalenceOr
 import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.oracle.MembershipOracle.RestrictedAutomatonMembershipOracle;
 import de.learnlib.api.query.DefaultQuery;
-import de.learnlib.datastructure.observationtable.onecounter.PairCounterValueOutput;
 import de.learnlib.datastructure.observationtable.Row;
 import de.learnlib.examples.dfa.ExamplePaulAndMary;
 import de.learnlib.examples.roca.ExampleRandomROCA;
@@ -28,8 +23,8 @@ import de.learnlib.oracle.membership.roca.RestrictedAutomatonROCASimulatorOracle
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.oca.ROCA;
 import net.automatalib.util.automata.oca.OCAUtil;
+import net.automatalib.util.tries.PrefixTrie;
 import net.automatalib.words.Alphabet;
-import net.automatalib.words.Word;
 import net.automatalib.words.impl.Alphabets;
 import net.automatalib.words.impl.Symbol;
 
@@ -42,6 +37,9 @@ public class LStarROCATest {
         ROCA<?, I> learnt = run(target, alphabet, learner, eqOracle, membershipOracle, counterValueOracle, maxRounds);
         Assert.assertNotNull(learnt);
         Assert.assertTrue(OCAUtil.testEquivalence(target, learnt, alphabet));
+
+        ObservationTableWithCounterValuesROCA<I> table = learner.getObservationTable();
+        checkTable(table);
     }
 
     private static <I> ROCA<?, I> run(ROCA<?, I> target, Alphabet<I> alphabet, LStarROCA<I> learner,
@@ -78,6 +76,25 @@ public class LStarROCATest {
             Assert.assertTrue(refined);
         }
         return null;
+    }
+
+    private static <I> void checkTable(ObservationTableWithCounterValuesROCA<I> table) {
+        PrefixTrie<I> prefixOfL = new PrefixTrie<>(table.getInputAlphabet());
+        for (Row<I> row : table.getAllRows()) {
+            for (int i = 0; i < table.numberOfSuffixes(); i++) {
+                if (table.fullCellContents(row, i).getOutput()) {
+                    prefixOfL.add(row.getLabel().concat(table.getSuffix(i)));
+                }
+            }
+        }
+
+        for (Row<I> row : table.getAllRows()) {
+            for (int i = 0; i < table.numberOfSuffixes(); i++) {
+                // The cell has a -1 iff the word is not in the prefix of the language
+                Assert.assertEquals(table.fullCellContents(row, i).getCounterValue() != -1,
+                        prefixOfL.contains(row.getLabel().concat(table.getSuffix(i))));
+            }
+        }
     }
 
     private <I> void launch(ROCA<?, I> roca, Alphabet<I> alphabet) {
@@ -117,8 +134,6 @@ public class LStarROCATest {
         launch(example.getReferenceAutomaton(), example.getAlphabet());
     }
 
-    // successPercentage is used because it can happen than some ROCAs take too long
-    // to learn
     @Test(invocationCount = 10, timeOut = 1000)
     public void testLearningRandomROCA() {
         Alphabet<Character> alphabet = Alphabets.characters('a', 'b');

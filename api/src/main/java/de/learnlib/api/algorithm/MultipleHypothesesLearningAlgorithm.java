@@ -32,11 +32,7 @@ public interface MultipleHypothesesLearningAlgorithm<M, I, D> extends LearningAl
     }
 
     /**
-     * Gets every model that can be constructed from the current knowledge such that
-     * the models are consistent with the knowledge.
-     * 
-     * In other words, it is guaranteed that the models and the learner's knowledge
-     * agree on the acceptance of the words known by the learner.
+     * Gets every model that can be constructed from the current knowledge.
      * 
      * @return A collection of models
      */
@@ -55,6 +51,18 @@ public interface MultipleHypothesesLearningAlgorithm<M, I, D> extends LearningAl
          * @return An ROCA constructed from the learnt DFA
          */
         ROCA<?, I> getLearntDFAAsROCA();
+
+        /**
+         * Gets every model that can be constructed from the current knowledge such that
+         * the models are consistent with the knowledge.
+         * 
+         * In other words, it is guaranteed that the models and the learner's knowledge
+         * agree on the acceptance of the words known by the learner.
+         * 
+         * @return A collection of models
+         */
+        @Override
+        Collection<ROCA<?, I>> getHypothesisModels();
 
         int getCounterLimit();
     }

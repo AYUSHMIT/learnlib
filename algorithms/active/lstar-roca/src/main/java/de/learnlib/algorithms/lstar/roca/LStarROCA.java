@@ -71,6 +71,8 @@ public final class LStarROCA<I>
         this.alphabet = alphabet;
         this.table = new ObservationTableWithCounterValuesROCA<>(alphabet, counterValueOracle);
         counterLimit = 0;
+        hypothesis = new DefaultAutomatonWithCounterValuesROCA<>(alphabet);
+        hypothesis.addInitialState(false, 0);
     }
 
     @Override
@@ -90,15 +92,6 @@ public final class LStarROCA<I>
             .collect(Collectors.toList());
         // @formatter:on
         return goodRocas;
-    }
-
-    private void constructHypothesisEmptyLanguage() {
-        DefaultAutomatonWithCounterValuesROCA<I> hypothesis = new DefaultAutomatonWithCounterValuesROCA<>(alphabet);
-        DefaultAutomatonWithCounterValuesState q0 = hypothesis.addInitialState(false, 0);
-        for (I symbol : alphabet) {
-            hypothesis.setSuccessor(q0, symbol, q0);
-        }
-        this.hypothesis = hypothesis;
     }
 
     private boolean isConsistent(ROCA<?, I> roca) {
@@ -121,7 +114,7 @@ public final class LStarROCA<I>
     @Override
     public void startLearning() {
         // During the first round, we only want to test if the language is empty
-        constructHypothesisEmptyLanguage();
+        // Since the hypothesis is initialized as an ROCA accepting nothing, we do not have to do anything
     }
 
     @Override
