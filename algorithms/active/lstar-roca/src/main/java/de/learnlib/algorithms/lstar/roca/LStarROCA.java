@@ -16,7 +16,6 @@ import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.datastructure.observationtable.Inconsistency;
 import de.learnlib.datastructure.observationtable.OTLearner;
 import de.learnlib.datastructure.observationtable.Row;
-import de.learnlib.datastructure.observationtable.onecounter.PairCounterValueOutput;
 import de.learnlib.util.MQUtil;
 import net.automatalib.SupportsGrowingAlphabet;
 import net.automatalib.automata.oca.ROCA;

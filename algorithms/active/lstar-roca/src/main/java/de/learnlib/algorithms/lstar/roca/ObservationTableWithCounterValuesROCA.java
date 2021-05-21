@@ -13,9 +13,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.datastructure.observationtable.Inconsistency;
 import de.learnlib.datastructure.observationtable.Row;
-import de.learnlib.datastructure.observationtable.onecounter.AbstractObservationTableWithCounterValues;
-import de.learnlib.datastructure.observationtable.onecounter.PairCounterValueOutput;
-import net.automatalib.util.tries.PrefixTrie;
+import net.automatalib.incremental.dfa.Acceptance;
+import net.automatalib.incremental.dfa.tree.IncrementalPCDFATreeBuilder;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
 
@@ -50,7 +49,7 @@ public final class ObservationTableWithCounterValuesROCA<I>
 
     private final MembershipOracle.CounterValueOracle<I> counterValueOracle;
 
-    private final PrefixTrie<I> prefixOfL;
+    private final IncrementalPCDFATreeBuilder<I> prefixOfL;
 
     private final List<Set<Integer>> approx = new ArrayList<>();
     private final Map<Set<Integer>, Integer> approxToApproxId = new HashMap<>();
@@ -62,7 +61,7 @@ public final class ObservationTableWithCounterValuesROCA<I>
             MembershipOracle.CounterValueOracle<I> counterValueOracle) {
         super(alphabet);
         this.counterValueOracle = counterValueOracle;
-        this.prefixOfL = new PrefixTrie<>(false, alphabet);
+        this.prefixOfL = new IncrementalPCDFATreeBuilder<>(alphabet);
     }
 
     @Override
@@ -162,7 +161,7 @@ public final class ObservationTableWithCounterValuesROCA<I>
     protected int getCounterValue(Word<I> prefix, Word<I> suffix) {
         Word<I> word = prefix.concat(suffix);
 
-        if (prefixOfL.contains(word)) {
+        if (prefixOfL.lookup(word) == Acceptance.TRUE) {
             return counterValueOracle.answerQuery(prefix, suffix);
         } else {
             return NO_COUNTER_VALUE;
@@ -182,8 +181,8 @@ public final class ObservationTableWithCounterValuesROCA<I>
             if (rowContents.get(i).getOutput()) {
                 Word<I> suffix = getSuffix(i);
                 Word<I> word = prefix.concat(suffix);
-                for (Word<I> pref : word.prefixes(true)) {
-                    prefixOfL.add(pref);
+                prefixOfL.insert(word);
+                for (Word<I> pref : word.prefixes(false)) {
                     if (canChangeCounterValues) {
                         Row<I> r = getRow(pref);
                         if (r != null) {
