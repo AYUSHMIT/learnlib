@@ -7,6 +7,7 @@ import de.learnlib.algorithms.lstar.roca.ROCAExperiment;
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.SingleQueryOracle;
 import de.learnlib.datastructure.observationtable.OTUtils;
+import de.learnlib.filter.cache.roca.CounterValueHashCacheOracle;
 import de.learnlib.filter.statistic.oracle.CounterValueCounterOracle;
 import de.learnlib.filter.statistic.oracle.ROCACounterEQOracle;
 import de.learnlib.oracle.equivalence.roca.ROCASimulatorEQOracle;
@@ -63,7 +64,8 @@ public class ROCAExample {
                 "membership queries");
 
         SingleQueryOracle.SingleQueryCounterValueOracle<I> counterValue = new CounterValueOracle<>(target);
-        CounterValueCounterOracle<I> counterValueOracle = new CounterValueCounterOracle<>(counterValue,
+        CounterValueHashCacheOracle<I> counterValueCache = new CounterValueHashCacheOracle<>(counterValue);
+        CounterValueCounterOracle<I> counterValueOracle = new CounterValueCounterOracle<>(counterValueCache,
                 "counter value queries");
 
         EquivalenceOracle.ROCAEquivalenceOracle<I> eqOracle = new ROCASimulatorEQOracle<>(target);
