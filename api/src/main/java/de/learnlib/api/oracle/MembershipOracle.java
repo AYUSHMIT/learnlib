@@ -109,6 +109,14 @@ public interface MembershipOracle<I, D> extends QueryAnswerer<I, D>, BatchProces
     }
 
     /**
+     * A specialization of the {@link MembershipOracle} interface for membership oracles working over an ROCA.
+     * 
+     * @param <I>
+     *         input symbol type
+     */
+    interface ROCAMembershipOracle<I> extends MembershipOracle<I, Boolean> {}
+
+    /**
      * A specialization of the {@link MembershipOracle} that outputs an integer.
      * 
      * @param <I>

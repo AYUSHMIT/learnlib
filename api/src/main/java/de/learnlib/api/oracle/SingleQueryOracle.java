@@ -56,6 +56,8 @@ public interface SingleQueryOracle<I, D> extends MembershipOracle<I, D> {
 
     interface SingleQueryOracleRestrictedAutomaton<I> extends SingleQueryOracle<I, Boolean>, RestrictedAutomatonMembershipOracle<I> {}
 
+    interface SingleQueryOracleROCA<I> extends SingleQueryOracle<I, Boolean>, ROCAMembershipOracle<I> {}
+
     interface SingleQueryCounterValueOracle<I> extends SingleQueryOracle<I, Integer>, CounterValueOracle<I> {}
 
 }

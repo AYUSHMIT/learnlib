@@ -22,6 +22,7 @@ import de.learnlib.api.query.Query;
 import de.learnlib.util.MQUtil;
 import net.automatalib.automata.concepts.SuffixOutput;
 import net.automatalib.automata.fsa.DFA;
+import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.words.Word;
 
@@ -75,6 +76,12 @@ public class SimulatorOracle<I, D> implements SingleQueryOracle<I, D> {
 
         public MealySimulatorOracle(MealyMachine<?, I, ?, O> mealy) {
             super(mealy);
+        }
+    }
+
+    public static class ROCASimulatorOracle<I> extends SimulatorOracle<I, Boolean> implements SingleQueryOracleROCA<I> {
+        public ROCASimulatorOracle(ROCA<?, I> roca) {
+            super(roca);
         }
     }
 
