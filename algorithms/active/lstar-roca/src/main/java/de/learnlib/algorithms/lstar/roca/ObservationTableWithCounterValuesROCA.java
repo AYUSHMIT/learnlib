@@ -434,7 +434,6 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
         for (RowImpl<I> row : allRows) {
             createTreeNodes(row, newSuffixList, oracle);
-            assert row.hasContents();
         }
 
         return true;
@@ -500,7 +499,6 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         for (RowImpl<I> row : freshRows) {
             // createTreeNodes will also set the counter values when needed
             createTreeNodes(row, suffixes, oracle);
-            assert row.hasContents();
         }
     }
 
@@ -536,9 +534,6 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
             toSpRows.add(row);
         }
         toShortPrefixesInternal(toSpRows, oracle);
-        for (RowImpl<I> r : allRows) {
-            assert r.hasContents();
-        }
         addSuffixesInternal(newSuffixes, oracle);
 
         // Finally, we update the canonical rows and seek the unclosed rows
