@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 import de.learnlib.api.algorithm.feature.GlobalSuffixLearner;
 import de.learnlib.api.oracle.EquivalenceOracle;
@@ -52,7 +51,7 @@ public final class LStarROCA<I>
 
     private final Alphabet<I> alphabet;
 
-    private final MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle;
+    private final MembershipOracle.ROCAMembershipOracle<I> membershipOracle;
     private final MembershipOracle.CounterValueOracle<I> counterValueOracle;
     private final EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> restrictedAutomatonEquivalenceOracle;
 
@@ -60,7 +59,7 @@ public final class LStarROCA<I>
     private DefaultAutomatonWithCounterValuesROCA<I> hypothesis;
     private int counterLimit;
 
-    public LStarROCA(MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle,
+    public LStarROCA(MembershipOracle.ROCAMembershipOracle<I> membershipOracle,
             MembershipOracle.CounterValueOracle<I> counterValueOracle,
             EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> automatonWithCounterValuesEquivalenceOracle,
             Alphabet<I> alphabet) {
@@ -74,6 +73,10 @@ public final class LStarROCA<I>
         hypothesis.addInitialState(false, 0);
     }
 
+    public DefaultAutomatonWithCounterValuesROCA<I> getHypothesis() {
+        return hypothesis;
+    }
+
     @Override
     public int getCounterLimit() {
         return counterLimit;
@@ -85,29 +88,7 @@ public final class LStarROCA<I>
             return Collections.singletonList(hypothesis.asAutomaton());
         }
 
-        // @formatter:off
-        List<ROCA<?, I>> goodRocas = hypothesis.toAutomata(counterLimit).stream()
-            .filter(roca -> isConsistent(roca))
-            .collect(Collectors.toList());
-        // @formatter:on
-        return goodRocas;
-    }
-
-    private boolean isConsistent(ROCA<?, I> roca) {
-        // We want the ROCA to be correct with regards to the information stored in the
-        // table.
-        // That is, the ROCA and the table must agree on the acceptance of the words.
-        for (Row<I> row : table.getAllRows()) {
-            Word<I> prefix = row.getLabel();
-            List<PairCounterValueOutput<Boolean>> rowContent = table.fullRowContents(row);
-            for (int i = 0; i < table.numberOfSuffixes(); i++) {
-                Word<I> word = prefix.concat(table.getSuffix(i));
-                if (roca.accepts(word) != rowContent.get(i).getOutput()) {
-                    return false;
-                }
-            }
-        }
-        return true;
+        return hypothesis.toAutomata(counterLimit);
     }
 
     @Override
@@ -133,7 +114,6 @@ public final class LStarROCA<I>
         // @formatter:on
 
         // 2. We increase the counter limit in the oracles
-        membershipOracle.setCounterLimit(counterLimit);
         restrictedAutomatonEquivalenceOracle.setCounterLimit(counterLimit);
 
         // 3. If it's the first time we refine the hypothesis, we initialize the table
@@ -144,6 +124,7 @@ public final class LStarROCA<I>
             final List<Word<I>> initialPrefixes = ceQuery.getInput().prefixes(false);
             final List<Word<I>> initialSuffixes = initialSuffixes();
 
+            table.setInitialCounterLimit(counterLimit);
             unclosed = table.initialize(initialPrefixes, initialSuffixes, membershipOracle);
             completeConsistentTable(unclosed, table.isInitialConsistencyCheckRequired());
         } else if (!MQUtil.isCounterexample(ceQuery, hypothesis)) {
@@ -172,6 +153,7 @@ public final class LStarROCA<I>
             if (ce == null) {
                 return;
             }
+            assert MQUtil.isCounterexample(ce, hypothesis);
 
             int oldDistinctRows = table.numberOfDistinctRows();
             int oldSuffixes = table.numberOfSuffixes();
@@ -195,6 +177,11 @@ public final class LStarROCA<I>
     @Override
     public ObservationTableWithCounterValuesROCA<I> getObservationTable() {
         return table;
+    }
+
+    @Override
+    public boolean isCounterexample(Word<I> word, boolean output) {
+        return hypothesis.accepts(word) != output;
     }
 
     private List<Word<I>> initialSuffixes() {
@@ -241,6 +228,7 @@ public final class LStarROCA<I>
 
     private Word<I> analyzeInconsistency(Inconsistency<I> inconsistency) {
         int inputIdx = alphabet.getSymbolIndex(inconsistency.getSymbol());
+        I sym = alphabet.getSymbol(inputIdx);
 
         Row<I> successorRow1 = inconsistency.getFirstRow().getSuccessor(inputIdx);
         Row<I> successorRow2 = inconsistency.getSecondRow().getSuccessor(inputIdx);
@@ -248,18 +236,30 @@ public final class LStarROCA<I>
         int numSuffixes = table.getSuffixes().size();
 
         for (int i = 0; i < numSuffixes; i++) {
+            Word<I> suffix = table.getSuffixes().get(i);
+            Word<I> newSuffix = suffix.prepend(sym);
             PairCounterValueOutput<Boolean> val1 = table.fullCellContents(successorRow1, i);
             PairCounterValueOutput<Boolean> val2 = table.fullCellContents(successorRow2, i);
-            if (!Objects.equals(val1, val2)) {
-                I sym = alphabet.getSymbol(inputIdx);
-                Word<I> suffix = table.getSuffixes().get(i);
-                if (!table.getSuffixes().contains(suffix.prepend(sym))) {
-                    return suffix.prepend(sym);
+
+            // If both of the successors are short prefix rows, the inconsistency occurs when one of the cells differ.
+            // Otherwise, we have to check that the counter values are both not UNKNOWN_COUNTER_VALUE.
+            if (successorRow1.isShortPrefixRow() && successorRow2.isShortPrefixRow()) {
+                if (!Objects.equals(val1, val2)) {
+                    if (!table.getSuffixes().contains(newSuffix)) {
+                        return newSuffix;
+                    }
+                }
+            }
+            else {
+                if (!Objects.equals(val1.getOutput(), val2.getOutput()) || (val1.getCounterValue() != ObservationTreeNode.UNKNOWN_COUNTER_VALUE && val2.getCounterValue() != ObservationTreeNode.UNKNOWN_COUNTER_VALUE && val1.getCounterValue() != val2.getCounterValue())) {
+                    if (!table.getSuffixes().contains(newSuffix)) {
+                        return newSuffix;
+                    }
                 }
             }
         }
 
-        throw new IllegalArgumentException("Bogus inconsistency");
+        throw new IllegalArgumentException("Bogus inconsistency: " + inconsistency.getFirstRow().getLabel() + " and " + inconsistency.getSecondRow().getLabel() + " for symbol " + inconsistency.getSymbol());
     }
 
     @Override

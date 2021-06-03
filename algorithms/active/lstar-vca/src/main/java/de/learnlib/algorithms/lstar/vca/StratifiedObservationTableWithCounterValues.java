@@ -1,4 +1,4 @@
-package de.learnlib.datastructure.observationtable.onecounter;
+package de.learnlib.algorithms.lstar.vca;
 
 import java.util.ArrayList;
 import java.util.Collection;

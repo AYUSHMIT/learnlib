@@ -1,31 +1,33 @@
-package de.learnlib.datastructure.observationtable.onecounter;
+package de.learnlib.algorithms.lstar.roca;
+
+import java.util.List;
 
 import de.learnlib.datastructure.observationtable.Row;
 import net.automatalib.commons.smartcollections.ResizingArrayStorage;
 import net.automatalib.words.Word;
 
 /**
- * Implementation of a row where the label of the row has an associated counter value.
- * @param <I> Input alphabet type
+ * An implementation of a row for {@link ObservationTableWithCounterValuesROCA}.
+ * 
  * @author Gaëtan Staquet
  */
-final class RowImpl<I> implements Row<I> {
-    private final Word<I> label;
+class RowImpl<I> implements Row<I> {
     private final int rowId;
-    private int counterValue;
+    private final ObservationTreeNode<I> node;
 
-    private int rowContentId = -1;
+    private int canonicalId = -1;
     private int lpIndex;
     private ResizingArrayStorage<RowImpl<I>> successors;
 
-    RowImpl(Word<I> label, int rowId, int counterValue) {
-        this.label = label;
+    private List<ObservationTreeNode<I>> rowContents;
+
+    RowImpl(int rowId, ObservationTreeNode<I> node) {
         this.rowId = rowId;
-        this.counterValue = counterValue;
+        this.node = node;
     }
 
-    RowImpl(Word<I> label, int rowId, int counterValue, int alphabetSize) {
-        this(label, rowId, counterValue);
+    RowImpl(int rowId, ObservationTreeNode<I> node, int alphabetSize) {
+        this(rowId, node);
 
         makeShort(alphabetSize);
     }
@@ -37,12 +39,20 @@ final class RowImpl<I> implements Row<I> {
 
     @Override
     public int getRowContentId() {
-        return rowContentId;
+        return rowId;
+    }
+
+    public int getCanonicalId() {
+        return canonicalId;
+    }
+
+    public ObservationTreeNode<I> getNode() {
+        return node;
     }
 
     @Override
     public Word<I> getLabel() {
-        return label;
+        return node.getPrefix();
     }
 
     @Override
@@ -53,14 +63,6 @@ final class RowImpl<I> implements Row<I> {
     @Override
     public RowImpl<I> getSuccessor(int inputIdx) {
         return successors.array[inputIdx];
-    }
-
-    int getCounterValue() {
-        return counterValue;
-    }
-
-    public void setCounterValue(int counterValue) {
-        this.counterValue = counterValue;
     }
 
     void makeShort(int initialAlphabetSize) {
@@ -75,8 +77,8 @@ final class RowImpl<I> implements Row<I> {
         successors.array[inputIdx] = successor;
     }
 
-    void setRowContentId(int id) {
-        rowContentId = id;
+    void setCanonicalId(int canonicalId) {
+        this.canonicalId = canonicalId;
     }
 
     void setLpIndex(int lpIndex) {
@@ -89,5 +91,18 @@ final class RowImpl<I> implements Row<I> {
 
     void ensureInputCapacity(int capacity) {
         successors.ensureCapacity(capacity);
+    }
+
+    List<ObservationTreeNode<I>> getRowContents() {
+        return rowContents;
+    }
+
+    void setRowContents(List<ObservationTreeNode<I>> contents) {
+        this.rowContents = contents;
+    }
+
+    @Override
+    public boolean hasContents() {
+        return getRowContents() != null;
     }
 }

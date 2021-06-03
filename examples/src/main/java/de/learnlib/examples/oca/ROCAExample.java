@@ -10,12 +10,12 @@ import de.learnlib.datastructure.observationtable.OTUtils;
 import de.learnlib.filter.cache.roca.CounterValueHashCacheOracle;
 import de.learnlib.filter.statistic.oracle.CounterValueCounterOracle;
 import de.learnlib.filter.statistic.oracle.ROCACounterEQOracle;
+import de.learnlib.filter.statistic.oracle.ROCACounterOracle;
 import de.learnlib.oracle.equivalence.roca.ROCASimulatorEQOracle;
 import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonCounterEQOracle;
 import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonROCASimulatorEQOracle;
+import de.learnlib.oracle.membership.SimulatorOracle.ROCASimulatorOracle;
 import de.learnlib.oracle.membership.roca.CounterValueOracle;
-import de.learnlib.oracle.membership.roca.RestrictedAutomatonCounterOracle;
-import de.learnlib.oracle.membership.roca.RestrictedAutomatonROCASimulatorOracle;
 import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.automata.oca.DefaultROCA;
 import net.automatalib.automata.oca.ROCA;
@@ -31,9 +31,7 @@ public class ROCAExample {
 
     public static void main(String[] args) throws IOException {
         ROCA<?, Character> target = constructSUL();
-        Alphabet<Character> alphabet = target.getAlphabet();
-
-        runExample(target, alphabet);
+        runExample(target, target.getAlphabet());
     }
 
     private static ROCA<?, Character> constructSUL() {
@@ -58,10 +56,8 @@ public class ROCAExample {
     }
 
     private static <I> void runExample(ROCA<?, I> target, Alphabet<I> alphabet) throws IOException {
-        SingleQueryOracle.SingleQueryOracleRestrictedAutomaton<I> sul = new RestrictedAutomatonROCASimulatorOracle<>(
-                target);
-        RestrictedAutomatonCounterOracle<I> membershipOracle = new RestrictedAutomatonCounterOracle<>(sul,
-                "membership queries");
+        SingleQueryOracle.SingleQueryOracleROCA<I> sul = new ROCASimulatorOracle<>(target);
+        ROCACounterOracle<I> membershipOracle = new ROCACounterOracle<>(sul, "membership queries");
 
         SingleQueryOracle.SingleQueryCounterValueOracle<I> counterValue = new CounterValueOracle<>(target);
         CounterValueHashCacheOracle<I> counterValueCache = new CounterValueHashCacheOracle<>(counterValue);

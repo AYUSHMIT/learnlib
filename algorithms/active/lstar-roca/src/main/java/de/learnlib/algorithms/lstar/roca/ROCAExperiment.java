@@ -59,8 +59,13 @@ public final class ROCAExperiment<I> extends AbstractExperiment<ROCA<?, I>> {
 
                 if (ce == null) {
                     return hypothesis;
-                }
-                else if (!hypothesis.accepts(ce.getInput())) {
+                } else if (!hypothesis.accepts(ce.getInput())
+                        && learningAlgorithm.isCounterexample(ce.getInput(), ce.getOutput())) {
+                    // Since we want the output of the counterexample to be true and to be an actual
+                    // counterexample for the learner, we have to discard some counterexamples.
+                    // It may happen than a word is a counterexample for an ROCA but not for the
+                    // learner's knowledge as the ROCAs construction process does not necessarily
+                    // take into account the whole table.
                     counterexample = ce;
                 }
             }

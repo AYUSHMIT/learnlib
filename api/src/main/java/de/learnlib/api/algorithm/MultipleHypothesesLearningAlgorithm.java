@@ -4,6 +4,7 @@ import java.util.Collection;
 
 import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.oca.VCA;
+import net.automatalib.words.Word;
 
 /**
  * Basic interface for a model inference algorithm that can output multiple
@@ -52,19 +53,18 @@ public interface MultipleHypothesesLearningAlgorithm<M, I, D> extends LearningAl
          */
         ROCA<?, I> getLearntDFAAsROCA();
 
-        /**
-         * Gets every model that can be constructed from the current knowledge such that
-         * the models are consistent with the knowledge.
-         * 
-         * In other words, it is guaranteed that the models and the learner's knowledge
-         * agree on the acceptance of the words known by the learner.
-         * 
-         * @return A collection of models
-         */
         @Override
         Collection<ROCA<?, I>> getHypothesisModels();
 
         int getCounterLimit();
+
+        /**
+         * Determines whether the given word is a counterexample.
+         * @param word The word
+         * @param output Whether the word should be accepted or rejected
+         * @return True iff word is a counterexample
+         */
+        boolean isCounterexample(Word<I> word, boolean output);
     }
 
     /**

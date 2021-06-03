@@ -1,100 +1,316 @@
 package de.learnlib.algorithms.lstar.roca;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.datastructure.observationtable.Inconsistency;
+import de.learnlib.datastructure.observationtable.MutableObservationTable;
+import de.learnlib.datastructure.observationtable.OTUtils;
+import de.learnlib.datastructure.observationtable.ObservationTable;
 import de.learnlib.datastructure.observationtable.Row;
-import net.automatalib.incremental.dfa.Acceptance;
-import net.automatalib.incremental.dfa.tree.IncrementalPCDFATreeBuilder;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
+import net.automatalib.words.impl.Alphabets;
 
 /**
- * An observation table where observations are pair (output, counter values) for
- * ROCAs.
+ * An observation table for {@link LStarROCA} where observations are pair
+ * (output, counter value).
  * 
- * The counter value of a word is determined by a query to an oracle, if and
- * only if the word is in the known prefix of the language. If the word is not
- * in the prefix, then the value -1 is put in the table.
+ * The implementation assumes the target ROCA accepts by final state and counter
+ * value equal to zero, i.e., {@link AcceptanceMode.BOTH};
  * 
- * For each row r of the table, a set Approx(r) is computed. Approx(r) is
- * defined as the set of short prefix rows u such that, for all prefixes w, the
- * outputs of r and u agree, and, if the counter values of rw and uw are both
- * not -1, then the two counter values must be equal.
+ * The learnt knowledge is actually stored in a prefix tree. The cells in the
+ * table are references to nodes in the tree. This implies the learner stores
+ * more information than is actually used. Storing more information allows us to
+ * reduce the number of queries.
  * 
+ * The counter value of a node is computed if and only if the node's label is in
+ * the prefix of the language. That is, we ask counter value queries only when
+ * we are sure the information will be useful. Otherwise, we store "-1" in the
+ * table.
+ * 
+ * To determine if the table is closed and consistent, we first have to compute,
+ * for each row r, the set of rows that approximate r. We call this set
+ * "Approx". Approx is computed as follows:
  * <ul>
- * <li>The table is said closed when each long prefix row r has a non-empty
- * Approx(r).</li>
- * <li>The table said is consistent if and only two short prefix rows u and v
- * such that Approx(u) = Approx(v) are such that for all input symbol a,
- * Approx(ua) = Approx(va).</li>
+ * <li>If r is a short prefix row, Approx(r) is the set of short prefix rows
+ * with exactly the same contents (i.e., the same output and counter value for
+ * each suffix).</li>
+ * <li>If r is a short prefix row but is such that each cell is (false, -1),
+ * then Approx(r) is not computed.</li>
+ * <li>If r is a long prefix row and there is a cell that is not (false, -1),
+ * Approx(r) is the set of short prefix rows that approximate r. A row u
+ * approximate r if, for each suffix, the output of u and r is the same, and
+ * (the counter values of u and r are both not -1) implies the counter values of
+ * u and r are equal. That is, the outputs must always be identical but there
+ * may be differences in counter values if one of the two counter values is
+ * -1.</li>
  * </ul>
+ * 
+ * Then, the table is closed if each row has a non-empty Approx and is
+ * consistent if, for all row r, the intersection of all Approx(ua) (with u a
+ * row in Approx(r) and a a symbol in the alphabet) is not empty. The rows where
+ * all cells are (false, -1) are not considered in both checks.
  * 
  * @param <I> Input alphabet type
  * @author Gaëtan Staquet
  */
-public final class ObservationTableWithCounterValuesROCA<I>
-        extends AbstractObservationTableWithCounterValues<I, Boolean> {
+final public class ObservationTableWithCounterValuesROCA<I> implements MutableObservationTable<I, Boolean> {
+    private final static int NO_APPROX = -1;
 
-    private static final int NO_COUNTER_VALUE = -1;
+    private final List<RowImpl<I>> shortPrefixRows = new ArrayList<>();
+    private final List<RowImpl<I>> longPrefixRows = new ArrayList<>();
+    private final List<RowImpl<I>> allRows = new ArrayList<>();
+    private int numRows = 0;
 
-    private final MembershipOracle.CounterValueOracle<I> counterValueOracle;
+    private final Map<Word<I>, RowImpl<I>> rowMap = new HashMap<>();
 
-    private final IncrementalPCDFATreeBuilder<I> prefixOfL;
+    private final ObservationTreeNode<I> observationTreeRoot;
 
     private final List<Set<Integer>> approx = new ArrayList<>();
     private final Map<Set<Integer>, Integer> approxToApproxId = new HashMap<>();
-    private final Map<Integer, Integer> rowIdToApproxId = new HashMap<>();
     // Approx id -> canonical row
-    private final Map<Integer, Row<I>> canonicalRows = new HashMap<>();
+    private final Map<Integer, RowImpl<I>> canonicalRows = new HashMap<>();
 
-    protected ObservationTableWithCounterValuesROCA(Alphabet<I> alphabet,
-            MembershipOracle.CounterValueOracle<I> counterValueOracle) {
-        super(alphabet);
-        this.counterValueOracle = counterValueOracle;
-        this.prefixOfL = new IncrementalPCDFATreeBuilder<>(alphabet);
-    }
+    private final List<Word<I>> suffixes = new ArrayList<>();
+    private final Set<Word<I>> suffixesSet = new HashSet<>();
 
-    @Override
-    public @Nullable Row<I> getCanonicalRow(Row<I> row) {
-        if (isCoAccessibleRow(row)) {
-            return canonicalRows.get(rowIdToApproxId.get(row.getRowId()));
-        } else {
-            return null;
+    private final Alphabet<I> alphabet;
+    private int alphabetSize;
+
+    public int counterLimit = -1;
+
+    private boolean initialConsistencyCheckRequired;
+
+    private final MembershipOracle.CounterValueOracle<I> counterValueOracle;
+
+    private static <I> boolean checkInitialPrefixClosed(List<Word<I>> initialShortPrefixes) {
+        Set<Word<I>> prefixes = new HashSet<>(initialShortPrefixes);
+        for (Word<I> pref : initialShortPrefixes) {
+            if (!pref.isEmpty() && !prefixes.contains(pref.prefix(-1))) {
+                return false;
+            }
         }
+
+        return true;
+    }
+
+    public ObservationTableWithCounterValuesROCA(Alphabet<I> alphabet,
+            MembershipOracle.CounterValueOracle<I> counterValueOracle) {
+        this.alphabet = alphabet;
+        this.alphabetSize = alphabet.size();
+        this.observationTreeRoot = new ObservationTreeNode<>(Word.epsilon(), null, alphabet);
+        this.counterValueOracle = counterValueOracle;
+    }
+
+    /**
+     * Creates an object implementing
+     * {@code ObservationTable<I, OutputAndCounterValue>}.
+     * 
+     * The returned table can be used to nicely display its contents (see
+     * {@link OTUtils}).
+     * 
+     * @return
+     */
+    public ObservationTable<I, PairCounterValueOutput<Boolean>> toClassicObservationTable() {
+        class Table implements ObservationTable<I, PairCounterValueOutput<Boolean>> {
+
+            private final ObservationTableWithCounterValuesROCA<I> table;
+
+            public Table(ObservationTableWithCounterValuesROCA<I> table) {
+                this.table = table;
+            }
+
+            @Override
+            public Word<I> transformAccessSequence(Word<I> word) {
+                return table.transformAccessSequence(word);
+            }
+
+            @Override
+            public Alphabet<I> getInputAlphabet() {
+                return table.getInputAlphabet();
+            }
+
+            @Override
+            public Collection<Row<I>> getShortPrefixRows() {
+                return table.getShortPrefixRows();
+            }
+
+            @Override
+            public Collection<Row<I>> getLongPrefixRows() {
+                return table.getLongPrefixRows();
+            }
+
+            @Override
+            public Row<I> getRow(int idx) {
+                return table.getRow(idx);
+            }
+
+            @Override
+            public int numberOfDistinctRows() {
+                return table.numberOfDistinctRows();
+            }
+
+            @Override
+            public List<Word<I>> getSuffixes() {
+                return table.getSuffixes();
+            }
+
+            @Override
+            public List<PairCounterValueOutput<Boolean>> rowContents(Row<I> row) {
+                return table.fullRowContents(row);
+            }
+
+        }
+
+        return new Table(this);
     }
 
     @Override
+    public Alphabet<I> getInputAlphabet() {
+        return alphabet;
+    }
+
+    @Override
+    public Collection<Row<I>> getShortPrefixRows() {
+        return Collections.unmodifiableCollection(shortPrefixRows);
+    }
+
+    @Override
+    public Collection<Row<I>> getLongPrefixRows() {
+        return Collections.unmodifiableCollection(longPrefixRows);
+    }
+
+    @Override
+    public Row<I> getRow(int idx) {
+        return allRows.get(idx);
+    }
+
+    @Override
+    public int numberOfDistinctRows() {
+        Set<List<PairCounterValueOutput<Boolean>>> distinct = new HashSet<>();
+        allRows.stream().forEach(r -> distinct.add(this.fullRowContents(r)));
+        return distinct.size();
+    }
+
+    @Override
+    public boolean isInitialized() {
+        return numberOfDistinctRows() != 0;
+    }
+
+    @Override
+    public List<Word<I>> getSuffixes() {
+        return Collections.unmodifiableList(suffixes);
+    }
+
+    /**
+     * Gets a list with only the outputs of the given row.
+     * 
+     * @param row The row.
+     * @return A list with booleans
+     */
+    @Override
+    public List<Boolean> rowContents(Row<I> row) {
+        List<ObservationTreeNode<I>> contents = treeNodes(row);
+        return contents.stream().map(c -> c.getOutput()).collect(Collectors.toList());
+    }
+
+    @Override
+    public Boolean cellContents(Row<I> row, int columnId) {
+        List<ObservationTreeNode<I>> contents = treeNodes(row);
+        return contents.get(columnId).getOutput();
+    }
+
+    /**
+     * Gets a list of pairs (output, counter value) for the given row.
+     * 
+     * That is, it gives the actual contents of the row.
+     * 
+     * @param row The row
+     * @return The row contents
+     */
+    public List<PairCounterValueOutput<Boolean>> fullRowContents(Row<I> row) {
+        List<ObservationTreeNode<I>> nodes = treeNodes(row);
+        return nodes.stream().map(n -> n.getSimplifiedCounterValueOutput()).collect(Collectors.toList());
+    }
+
+    public PairCounterValueOutput<Boolean> fullCellContents(Row<I> row, int columnId) {
+        return treeNodes(row).get(columnId).getSimplifiedCounterValueOutput();
+    }
+
+    private List<ObservationTreeNode<I>> treeNodes(Row<I> row) {
+        return allRows.get(row.getRowId()).getRowContents();
+    }
+
+    @Override
+    public boolean isInitialConsistencyCheckRequired() {
+        return initialConsistencyCheckRequired;
+    }
+
     public List<Row<I>> getCanonicalRows() {
         return new ArrayList<>(canonicalRows.values());
     }
 
     @Override
-    protected List<List<Row<I>>> findUnclosedRows() {
-        Map<Integer, List<Row<I>>> unclosed = new HashMap<>();
-        for (Row<I> lpRow : getLongPrefixRows()) {
-            if (unclosed.containsKey(lpRow.getRowContentId())) {
-                unclosed.get(lpRow.getRowContentId()).add(lpRow);
-            } else if (isCoAccessibleRow(lpRow) && getCanonicalRow(lpRow) == null) {
-                ArrayList<Row<I>> unc = new ArrayList<>();
-                unc.add(lpRow);
-                unclosed.put(lpRow.getRowContentId(), unc);
+    public @Nullable Inconsistency<I> findInconsistency() {
+        final Alphabet<I> alphabet = getInputAlphabet();
+
+        // To determine whether the table is consistent, we have to check if there is a
+        // row r such that the intersection of all Approx(ua) is empty, with u in
+        // Approx(r) and a an input symbol.
+        // If this is the case, r and u are witnesses for inconsistency due to symbol a.
+        // Note that non co-accessible rows are not considered as they have no canonical
+        // rows.
+        for (RowImpl<I> startRow : canonicalRows.values()) {
+            int startApproxId = startRow.getCanonicalId();
+            Set<Integer> startApprox = approx.get(startApproxId);
+            // If the only row in Approx(r) is r, we have nothing to do.
+            if (startApprox.size() == 1) {
+                continue;
+            }
+
+            for (int i = 0; i < alphabet.size(); i++) {
+                RowImpl<I> successorRow = startRow.getSuccessor(i);
+                int successorApproxId = successorRow.getCanonicalId();
+                // If the successor row is co-accessible
+                if (successorApproxId != NO_APPROX) {
+                    Set<Integer> intersection = new HashSet<>();
+                    intersection.addAll(approx.get(successorApproxId));
+
+                    for (Integer equivalentRowId : startApprox) {
+                        RowImpl<I> equivalentRow = allRows.get(equivalentRowId);
+                        RowImpl<I> equivalentSuccessorRow = equivalentRow.getSuccessor(i);
+                        int equivalentSuccessorApproxId = equivalentSuccessorRow.getCanonicalId();
+
+                        if (equivalentSuccessorApproxId != NO_APPROX) {
+                            // Both successors have an approx
+                            intersection.retainAll(approx.get(equivalentSuccessorApproxId));
+                            if (intersection.size() == 0) {
+                                return new Inconsistency<>(startRow, equivalentRow, alphabet.getSymbol(i));
+                            }
+                        }
+                    }
+                }
             }
         }
-        return new ArrayList<>(unclosed.values());
+
+        return null;
     }
 
     @Override
     public @Nullable Row<I> findUnclosedRow() {
+        // A row is unclosed if it is co-accessible and does not have a canonical row.
         for (Row<I> lpRow : getLongPrefixRows()) {
             if (isCoAccessibleRow(lpRow) && getCanonicalRow(lpRow) == null) {
                 return lpRow;
@@ -103,133 +319,321 @@ public final class ObservationTableWithCounterValuesROCA<I>
         return null;
     }
 
-    @Override
-    public @Nullable Inconsistency<I> findInconsistency() {
-        final Alphabet<I> alphabet = getInputAlphabet();
+    public @Nullable Row<I> getCanonicalRow(Row<I> row) {
+        if (isCoAccessibleRow(row)) {
+            RowImpl<I> r = allRows.get(row.getRowId());
+            return canonicalRows.get(r.getCanonicalId());
+        } else {
+            return null;
+        }
+    }
 
-        for (Row<I> startRow : getCanonicalRows()) {
-            int startApproxId = rowIdToApproxId.get(startRow.getRowId());
-            Set<Integer> startApprox = approx.get(startApproxId);
-            if (startApprox.size() == 1) {
-                continue;
+    @Override
+    public @Nullable Row<I> getRow(Word<I> prefix) {
+        return rowMap.get(prefix);
+    }
+
+    @Override
+    public Word<I> transformAccessSequence(Word<I> word) {
+        Row<I> current = rowMap.get(Word.epsilon());
+        assert current != null;
+
+        for (I symbol : word) {
+            current = getRowSuccessor(current, symbol);
+            if (current == null) {
+                return null;
             }
+            current = getCanonicalRow(current);
+            assert current != null;
+        }
+
+        return current.getLabel();
+    }
+
+    public void setInitialCounterLimit(int counterLimit) {
+        this.counterLimit = counterLimit;
+    }
+
+    @Override
+    public List<List<Row<I>>> initialize(List<Word<I>> initialShortPrefixes, List<Word<I>> initialSuffixes,
+            MembershipOracle<I, Boolean> oracle) {
+        if (!allRows.isEmpty()) {
+            throw new IllegalStateException("Called initialize, but there are already rows present");
+        }
+
+        if (counterLimit == -1) {
+            throw new IllegalStateException("Called initialize without setting the initial counter limit");
+        }
+
+        if (!checkInitialPrefixClosed(initialShortPrefixes)) {
+            throw new IllegalArgumentException("Initial short prefixes are not prefix-closed");
+        }
+
+        if (!initialShortPrefixes.get(0).isEmpty()) {
+            throw new IllegalArgumentException("First initial short prefix MUST be the empty word!");
+        }
+
+        for (Word<I> suffix : initialSuffixes) {
+            if (suffixesSet.add(suffix)) {
+                suffixes.add(suffix);
+            }
+        }
+
+        // Initialize root of tree
+        boolean epsilonAccepted = oracle.answerQuery(Word.epsilon());
+        observationTreeRoot.setActualOutput(epsilonAccepted);
+        observationTreeRoot.setOutput(epsilonAccepted);
+        observationTreeRoot.setActualCounterValue(0);
+        observationTreeRoot.setCounterValue(0);
+        observationTreeRoot.inPrefix = epsilonAccepted;
+
+        for (Word<I> sp : initialShortPrefixes) {
+            RowImpl<I> row = createSpRow(sp);
+            // createTreeNodes will also fill the counter values when needed
+            createTreeNodes(row, suffixes, oracle);
 
             for (int i = 0; i < alphabet.size(); i++) {
-                Row<I> successorRow = startRow.getSuccessor(i);
-                int successorApproxId = rowIdToApproxId.getOrDefault(successorRow.getRowId(), -1);
-                if (successorApproxId == -1) {
-                    for (Integer equivalentRowId : startApprox) {
-                        Row<I> equivalentRow = getRow(equivalentRowId);
-                        Row<I> equivalentSuccessorRow = equivalentRow.getSuccessor(i);
-                        int equivalenceSuccessorApproxId = rowIdToApproxId
-                                .getOrDefault(equivalentSuccessorRow.getRowId(), -1);
-                        if (equivalenceSuccessorApproxId != -1) {
-                            return new Inconsistency<>(startRow, equivalentRow, alphabet.getSymbol(i));
-                        }
-                    }
-                } else {
-                    Set<Integer> intersection = new HashSet<>();
-                    intersection.addAll(approx.get(successorApproxId));
-                    for (Integer equivalentRowId : startApprox) {
-                        Row<I> equivalentRow = getRow(equivalentRowId);
-                        Row<I> equivalentSuccessorRow = equivalentRow.getSuccessor(i);
-                        int equivalenceSuccessorApproxId = rowIdToApproxId
-                                .getOrDefault(equivalentSuccessorRow.getRowId(), -1);
-                        if (equivalenceSuccessorApproxId == -1) {
-                            return new Inconsistency<>(startRow, equivalentRow, alphabet.getSymbol(i));
-                        }
-
-                        // Both successors have an approx
-                        intersection.retainAll(approx.get(equivalenceSuccessorApproxId));
-                        if (intersection.size() == 0) {
-                            return new Inconsistency<>(startRow, equivalentRow, alphabet.getSymbol(i));
-                        }
-                    }
+                I symbol = alphabet.getSymbol(i);
+                Word<I> lp = sp.append(symbol);
+                RowImpl<I> successorRow = rowMap.get(lp);
+                if (successorRow == null) {
+                    successorRow = createLpRow(lp);
+                    createTreeNodes(successorRow, suffixes, oracle);
                 }
+                row.setSuccessor(i, successorRow);
             }
         }
 
-        return null;
+        return updateCanonicalRows();
     }
 
     @Override
-    protected boolean shouldChangeCounterValue(Word<I> prefix, Word<I> suffix, int currentCounterValue) {
-        return currentCounterValue == NO_COUNTER_VALUE;
+    public List<List<Row<I>>> addSuffixes(Collection<? extends Word<I>> newSuffixes,
+            MembershipOracle<I, Boolean> oracle) {
+        if (!addSuffixesInternal(newSuffixes, oracle)) {
+            return Collections.emptyList();
+        }
+
+        return updateCanonicalRows();
+    }
+
+    private boolean addSuffixesInternal(Collection<? extends Word<I>> newSuffixes,
+            MembershipOracle<I, Boolean> oracle) {
+        List<Word<I>> newSuffixList = new ArrayList<>();
+        for (Word<I> suffix : newSuffixes) {
+            if (suffixesSet.add(suffix)) {
+                newSuffixList.add(suffix);
+            }
+        }
+
+        if (newSuffixList.isEmpty()) {
+            return false;
+        }
+
+        this.suffixes.addAll(newSuffixList);
+
+        for (RowImpl<I> row : allRows) {
+            createTreeNodes(row, newSuffixList, oracle);
+            assert row.hasContents();
+        }
+
+        return true;
     }
 
     @Override
-    protected int getCounterValue(Word<I> prefix, Word<I> suffix) {
-        Word<I> word = prefix.concat(suffix);
+    public List<List<Row<I>>> addShortPrefixes(List<? extends Word<I>> shortPrefixes,
+            MembershipOracle<I, Boolean> oracle) {
 
-        if (prefixOfL.lookup(word) == Acceptance.TRUE) {
-            return counterValueOracle.answerQuery(prefix, suffix);
+        List<Row<I>> toSpRows = new ArrayList<>();
+
+        for (Word<I> sp : shortPrefixes) {
+            Row<I> row = getRow(sp);
+            if (row != null) {
+                if (row.isShortPrefixRow()) {
+                    continue;
+                }
+            } else {
+                row = createSpRow(sp);
+            }
+            toSpRows.add(row);
+        }
+
+        return toShortPrefixes(toSpRows, oracle);
+    }
+
+    @Override
+    public List<List<Row<I>>> toShortPrefixes(List<Row<I>> lpRows, MembershipOracle<I, Boolean> oracle) {
+        toShortPrefixesInternal(lpRows, oracle);
+        return updateCanonicalRows();
+    }
+
+    private void toShortPrefixesInternal(List<Row<I>> lpRows, MembershipOracle<I, Boolean> oracle) {
+        List<RowImpl<I>> freshRows = new ArrayList<>();
+
+        for (Row<I> r : lpRows) {
+            final RowImpl<I> row = allRows.get(r.getRowId());
+            if (row.isShortPrefixRow()) {
+                if (row.hasContents()) {
+                    continue;
+                }
+                freshRows.add(row);
+            } else {
+                makeShort(row);
+                if (!row.hasContents()) {
+                    freshRows.add(row);
+                }
+            }
+
+            Word<I> prefix = row.getLabel();
+            for (int i = 0; i < alphabet.size(); i++) {
+                I symbol = alphabet.getSymbol(i);
+                Word<I> lp = prefix.append(symbol);
+                RowImpl<I> lpRow = rowMap.get(lp);
+                if (lpRow == null) {
+                    lpRow = createLpRow(lp);
+                    freshRows.add(lpRow);
+                }
+                row.setSuccessor(i, lpRow);
+            }
+        }
+
+        for (RowImpl<I> row : freshRows) {
+            // createTreeNodes will also set the counter values when needed
+            createTreeNodes(row, suffixes, oracle);
+            assert row.hasContents();
+        }
+    }
+
+    /**
+     * Increases the counter limit, and adds the provided short prefixes and
+     * suffixes.
+     * 
+     * @param newCounterLimit  The new counter limit
+     * @param newShortPrefixes The new short prefixes
+     * @param newSuffixes      The new suffixes
+     * @param oracle           The membership oracle
+     * @return The unclosed rows
+     */
+    public List<List<Row<I>>> increaseCounterLimit(int newCounterLimit, List<Word<I>> newShortPrefixes,
+            List<Word<I>> newSuffixes, MembershipOracle<I, Boolean> oracle) {
+        assert newCounterLimit > counterLimit;
+        this.counterLimit = newCounterLimit;
+
+        // First, we update the tree without adding new nodes
+        observationTreeRoot.increaseCounterLimit(oracle, counterValueOracle, counterLimit);
+
+        // Second, we add the new prefixes and suffixes
+        List<Row<I>> toSpRows = new ArrayList<>();
+        for (Word<I> sp : newShortPrefixes) {
+            Row<I> row = getRow(sp);
+            if (row != null) {
+                if (row.isShortPrefixRow()) {
+                    continue;
+                }
+            } else {
+                row = createSpRow(sp);
+            }
+            toSpRows.add(row);
+        }
+        toShortPrefixesInternal(toSpRows, oracle);
+        for (RowImpl<I> r : allRows) {
+            assert r.hasContents();
+        }
+        addSuffixesInternal(newSuffixes, oracle);
+
+        // Finally, we update the canonical rows and seek the unclosed rows
+        return updateCanonicalRows();
+    }
+
+    @Override
+    public List<List<Row<I>>> addAlphabetSymbol(I symbol, MembershipOracle<I, Boolean> oracle) {
+        if (!alphabet.containsSymbol(symbol)) {
+            Alphabets.toGrowingAlphabetOrThrowException(alphabet).addSymbol(symbol);
+        }
+
+        final int newAlphabetSize = alphabet.size();
+
+        if (isInitialized() && alphabetSize < newAlphabetSize) {
+            alphabetSize = newAlphabetSize;
+            final int newSymbolIndex = alphabet.getSymbolIndex(symbol);
+
+            for (RowImpl<I> spRow : shortPrefixRows) {
+                spRow.ensureInputCapacity(newAlphabetSize);
+
+                final Word<I> newLongPrefix = spRow.getLabel().append(symbol);
+                final RowImpl<I> longPrefixRow = createLpRow(newLongPrefix);
+
+                spRow.setSuccessor(newSymbolIndex, longPrefixRow);
+
+                createTreeNodes(longPrefixRow, suffixes, oracle);
+            }
+
+            return updateCanonicalRows();
         } else {
-            return NO_COUNTER_VALUE;
+            return Collections.emptyList();
         }
     }
 
-    @Override
-    protected boolean shouldChangeOutput(Word<I> prefix, Word<I> suffix, PairCounterValueOutput<Boolean> currentCell) {
-        return !currentCell.getOutput() && currentCell.getCounterValue() == NO_COUNTER_VALUE;
-    }
+    private List<List<Row<I>>> updateCanonicalRows() {
+        Map<Integer, List<Row<I>>> unclosed = new HashMap<>();
 
-    @Override
-    protected void processContentsMembershipQueries(Row<I> row, List<PairCounterValueOutput<Boolean>> rowContents,
-            boolean canChangeCounterValues) {
-        Word<I> prefix = row.getLabel();
-        for (int i = 0; i < rowContents.size(); i++) {
-            if (rowContents.get(i).getOutput()) {
-                Word<I> suffix = getSuffix(i);
-                Word<I> word = prefix.concat(suffix);
-                prefixOfL.insert(word);
-                for (Word<I> pref : word.prefixes(false)) {
-                    if (canChangeCounterValues) {
-                        Row<I> r = getRow(pref);
-                        if (r != null) {
-                            updateCounterValues(r);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @Override
-    protected void updateCanonicalRows() {
         canonicalRows.clear();
         approx.clear();
         approxToApproxId.clear();
-        rowIdToApproxId.clear();
-        for (Row<I> row : getAllRows()) {
-            Set<Integer> approxOfRow = computeApprox(row);
-            if (approxOfRow.size() == 0) {
-                continue;
+        for (RowImpl<I> row : allRows) {
+            // We reset the previously computed canonical id
+            row.setCanonicalId(NO_APPROX);
+            if (isCoAccessibleRow(row)) {
+                Set<Integer> approxOfRow = computeApprox(row);
+
+                // If the set of rows approximating the current row is empty, it means we have
+                // an unclosed row
+                if (approxOfRow.size() == 0) {
+                    assert !row.isShortPrefixRow();
+                    int unclosedId = Objects.hash(fullRowContents(row));
+                    if (!unclosed.containsKey(unclosedId)) {
+                        unclosed.put(unclosedId, new ArrayList<>());
+                    }
+                    unclosed.get(unclosedId).add(row);
+                } else {
+                    Integer approxId = approxToApproxId.get(approxOfRow);
+                    if (approxId == null) {
+                        Integer rowId = approxOfRow.iterator().next();
+                        approxId = approx.size();
+                        approx.add(approxOfRow);
+                        canonicalRows.put(approxId, allRows.get(rowId));
+                        approxToApproxId.put(approxOfRow, approxId);
+                    }
+
+                    row.setCanonicalId(approxId);
+                }
             }
 
-            Integer approxId = approxToApproxId.get(approxOfRow);
-            if (approxId == null) {
-                Integer rowId = approxOfRow.iterator().next();
-                approxId = approx.size();
-                approx.add(approxOfRow);
-                canonicalRows.put(approxId, getRow(rowId));
-                approxToApproxId.put(approxOfRow, approxId);
-            }
-
-            rowIdToApproxId.put(row.getRowId(), approxId);
         }
+
+        return new ArrayList<>(unclosed.values());
     }
 
     private Set<Integer> computeApprox(Row<I> row) {
+        // If row is a short prefix, Approx(row) is the set of short prefix rows with
+        // exactly the same contents for each suffix.
+        // If row is a long prefix, Approx(row) is the set of short prefix rows u such
+        // that, for each suffix, the outputs of r and u are identical and (the counter
+        // values of r and u are both not -1) implies (the counter values of u and r are
+        // equal), for all suffix.
         Set<Integer> result = new HashSet<>();
-        List<PairCounterValueOutput<Boolean>> rowContents = fullRowContents(row);
+        List<ObservationTreeNode<I>> rowContents = treeNodes(row);
         for (Row<I> spRow : getShortPrefixRows()) {
-            List<PairCounterValueOutput<Boolean>> spContents = fullRowContents(spRow);
+            List<ObservationTreeNode<I>> spContents = treeNodes(spRow);
             boolean isApprox = true;
             for (int i = 0; i < numberOfSuffixes(); i++) {
-                PairCounterValueOutput<Boolean> spCell = spContents.get(i);
-                PairCounterValueOutput<Boolean> rowCell = rowContents.get(i);
+                PairCounterValueOutput<Boolean> spCell = spContents.get(i).getSimplifiedCounterValueOutput();
+                PairCounterValueOutput<Boolean> rowCell = rowContents.get(i).getSimplifiedCounterValueOutput();
                 if (row.isShortPrefixRow()) {
-                    if (!Objects.equals(spCell, rowCell)) {
+                    if (!Objects.equals(spCell.getOutput(), rowCell.getOutput())) {
+                        isApprox = false;
+                        break;
+                    } else if (spCell.getCounterValue() != rowCell.getCounterValue()) {
                         isApprox = false;
                         break;
                     }
@@ -238,7 +642,9 @@ public final class ObservationTableWithCounterValuesROCA<I>
                         isApprox = false;
                         break;
                     }
-                    if (spCell.getCounterValue() != -1 && rowCell.getCounterValue() != -1
+
+                    if (spCell.getCounterValue() != ObservationTreeNode.UNKNOWN_COUNTER_VALUE
+                            && rowCell.getCounterValue() != ObservationTreeNode.UNKNOWN_COUNTER_VALUE
                             && spCell.getCounterValue() != rowCell.getCounterValue()) {
                         isApprox = false;
                         break;
@@ -253,13 +659,87 @@ public final class ObservationTableWithCounterValuesROCA<I>
         return result;
     }
 
+    /**
+     * Create the nodes in the tree for each provided suffix and sets the contents
+     * of the row.
+     * 
+     * That is, it sets the contents of the row to be the list of nodes in the row.
+     * 
+     * If the row already has contents, it appends the new nodes at the end of the
+     * list.
+     * 
+     * @param row      The row
+     * @param suffixes The suffixes to use.
+     * @param oracle   The membership oracle
+     */
+    private void createTreeNodes(RowImpl<I> row, List<Word<I>> suffixes, MembershipOracle<I, Boolean> oracle) {
+        // First, we get the node in the tree corresponding to the label of the row.
+        // Once we have that node, we add all the suffixes
+        ObservationTreeNode<I> prefixNode = row.getNode();
+
+        List<ObservationTreeNode<I>> nodes = row.getRowContents();
+        if (nodes == null) {
+            nodes = new ArrayList<>(suffixes.size());
+        }
+
+        for (Word<I> suffix : suffixes) {
+            nodes.add(prefixNode.addSuffixInTable(suffix, 0, oracle, counterValueOracle, counterLimit));
+        }
+
+        if (row.getRowContents() == null) {
+            row.setRowContents(nodes);
+        }
+    }
+
+    private RowImpl<I> createSpRow(Word<I> prefix) {
+        ObservationTreeNode<I> node = observationTreeRoot.getPrefix(prefix, 0);
+        RowImpl<I> row = new RowImpl<>(numRows++, node, alphabet.size());
+        allRows.add(row);
+        rowMap.put(prefix, row);
+        shortPrefixRows.add(row);
+        return row;
+    }
+
+    private RowImpl<I> createLpRow(Word<I> prefix) {
+        ObservationTreeNode<I> node = observationTreeRoot.getPrefix(prefix, 0);
+        RowImpl<I> row = new RowImpl<>(numRows++, node);
+        allRows.add(row);
+        rowMap.put(prefix, row);
+        int idx = longPrefixRows.size();
+        longPrefixRows.add(row);
+        row.setLpIndex(idx);
+        return row;
+    }
+
+    private void makeShort(RowImpl<I> row) {
+        if (row.isShortPrefixRow()) {
+            return;
+        }
+
+        int lastIdx = longPrefixRows.size() - 1;
+        RowImpl<I> last = longPrefixRows.get(lastIdx);
+        int rowIdx = row.getLpIndex();
+        longPrefixRows.remove(lastIdx);
+        if (last != row) {
+            longPrefixRows.set(rowIdx, last);
+            last.setLpIndex(rowIdx);
+        }
+
+        shortPrefixRows.add(row);
+        row.makeShort(alphabet.size());
+    }
+
     private boolean isCoAccessibleRow(Row<I> row) {
-        List<PairCounterValueOutput<Boolean>> rowContents = fullRowContents(row);
-        for (PairCounterValueOutput<Boolean> cell : rowContents) {
-            if (cell.getCounterValue() != NO_COUNTER_VALUE) {
+        List<ObservationTreeNode<I>> rowContents = treeNodes(row);
+        for (ObservationTreeNode<I> cell : rowContents) {
+            if (cell.getSimplifiedCounterValue() != ObservationTreeNode.UNKNOWN_COUNTER_VALUE) {
                 return true;
             }
         }
         return false;
+    }
+
+    ObservationTreeNode<I> getObservationTreeRoot() {
+        return observationTreeRoot;
     }
 }

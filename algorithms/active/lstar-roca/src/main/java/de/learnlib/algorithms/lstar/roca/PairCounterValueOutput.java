@@ -1,4 +1,4 @@
-package de.learnlib.datastructure.observationtable.onecounter;
+package de.learnlib.algorithms.lstar.roca;
 
 import java.util.Objects;
 
@@ -13,8 +13,8 @@ import java.util.Objects;
  * @author Gaëtan Staquet
  */
 public class PairCounterValueOutput<D> {
-    private final D output;
-    private final int counterValue;
+    private D output;
+    private int counterValue;
 
     public PairCounterValueOutput(D output, int counterValue) {
         this.output = output;
@@ -24,9 +24,17 @@ public class PairCounterValueOutput<D> {
     public D getOutput() {
         return output;
     }
+    
+    public void setOutput(D output) {
+        this.output = output;
+    }
 
     public int getCounterValue() {
         return counterValue;
+    }
+
+    public void setCounterValue(int counterValue) {
+        this.counterValue = counterValue;
     }
 
     @Override

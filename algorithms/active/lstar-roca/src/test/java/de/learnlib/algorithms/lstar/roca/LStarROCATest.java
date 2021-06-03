@@ -9,7 +9,7 @@ import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.EquivalenceOracle.ROCAEquivalenceOracle;
 import de.learnlib.api.oracle.EquivalenceOracle.RestrictedAutomatonEquivalenceOracle;
 import de.learnlib.api.oracle.MembershipOracle;
-import de.learnlib.api.oracle.MembershipOracle.RestrictedAutomatonMembershipOracle;
+import de.learnlib.api.oracle.MembershipOracle.ROCAMembershipOracle;
 import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.datastructure.observationtable.Row;
 import de.learnlib.examples.dfa.ExamplePaulAndMary;
@@ -19,7 +19,7 @@ import de.learnlib.examples.roca.ExampleTinyROCA;
 import de.learnlib.oracle.equivalence.roca.ROCASimulatorEQOracle;
 import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonROCASimulatorEQOracle;
 import de.learnlib.oracle.membership.roca.CounterValueOracle;
-import de.learnlib.oracle.membership.roca.RestrictedAutomatonROCASimulatorOracle;
+import de.learnlib.oracle.membership.SimulatorOracle.ROCASimulatorOracle;
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.oca.ROCA;
 import net.automatalib.util.automata.oca.OCAUtil;
@@ -31,7 +31,7 @@ import net.automatalib.words.impl.Symbol;
 public class LStarROCATest {
     private static <I> void testLearnROCA(ROCA<?, I> target, Alphabet<I> alphabet, LStarROCA<I> learner,
             EquivalenceOracle.ROCAEquivalenceOracle<I> eqOracle,
-            MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle,
+            MembershipOracle.ROCAMembershipOracle<I> membershipOracle,
             MembershipOracle.CounterValueOracle<I> counterValueOracle) {
         int maxRounds = (int) Math.pow(target.size(), 4);
         ROCA<?, I> learnt = run(target, alphabet, learner, eqOracle, membershipOracle, counterValueOracle, maxRounds);
@@ -44,11 +44,13 @@ public class LStarROCATest {
 
     private static <I> ROCA<?, I> run(ROCA<?, I> target, Alphabet<I> alphabet, LStarROCA<I> learner,
             EquivalenceOracle.ROCAEquivalenceOracle<I> eqOracle,
-            MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle,
+            MembershipOracle.ROCAMembershipOracle<I> membershipOracle,
             MembershipOracle.CounterValueOracle<I> counterValueOracle, int maxRounds) {
         learner.startLearning();
 
         while (maxRounds-- > 0) {
+            verifyInvariants(learner.getObservationTable().getObservationTreeRoot(), membershipOracle,
+                    counterValueOracle, learner.getCounterLimit());
             final Collection<ROCA<?, I>> hypotheses = learner.getHypothesisModels();
             DefaultQuery<I, Boolean> counterexample = null;
             for (ROCA<?, I> hypothesis : hypotheses) {
@@ -56,7 +58,8 @@ public class LStarROCATest {
 
                 if (ce == null) {
                     return hypothesis;
-                } else if (!hypothesis.accepts(ce.getInput())) {
+                } else if (!hypothesis.accepts(ce.getInput())
+                        && learner.isCounterexample(ce.getInput(), ce.getOutput())) {
                     counterexample = ce;
                 }
             }
@@ -76,6 +79,71 @@ public class LStarROCATest {
             Assert.assertTrue(refined);
         }
         return null;
+    }
+
+    /**
+     * Only for testing purpose!
+     */
+    private static <I> void verifyInvariants(ObservationTreeNode<I> node, MembershipOracle<I, Boolean> membershipOracle,
+            MembershipOracle<I, Integer> counterValueOracle, int counterLimit) {
+        PairCounterValueOutput<ObservationTreeNode.Output> cvOutput = node.getCvOutput();
+        PairCounterValueOutput<ObservationTreeNode.Output> actualCvOutput = node.getActualCvOutput();
+        if (cvOutput.getOutput() == ObservationTreeNode.Output.ACCEPTED) {
+            assert node.isInPrefix();
+        }
+
+        if (node.getParent() != null) {
+            if (!node.getParent().inPrefix) {
+                assert !node.isInPrefix();
+            }
+
+            if (node.getParent().getCounterValue() == ObservationTreeNode.OUTSIDE_COUNTER_LIMIT) {
+                assert node.getCounterValue() == ObservationTreeNode.OUTSIDE_COUNTER_LIMIT;
+            }
+        }
+
+        if (node.isInTable() && node.isInPrefix()) {
+            assert node.getCounterValue() != ObservationTreeNode.OUTSIDE_COUNTER_LIMIT;
+            assert cvOutput.getOutput() != ObservationTreeNode.Output.UNKNOWN;
+        }
+
+        if (node.isInPrefix()) {
+            if (cvOutput.getOutput() != ObservationTreeNode.Output.UNKNOWN) {
+                assert node.getCounterValue() != ObservationTreeNode.UNKNOWN_COUNTER_VALUE;
+            }
+            assert node.getCounterValue() != ObservationTreeNode.OUTSIDE_COUNTER_LIMIT;
+        }
+
+        if (actualCvOutput.getOutput() != ObservationTreeNode.Output.UNKNOWN) {
+            if (actualCvOutput.getOutput() == ObservationTreeNode.Output.REJECTED) {
+                assert cvOutput.getOutput() == ObservationTreeNode.Output.REJECTED;
+            } else {
+                assert cvOutput.getOutput() == ObservationTreeNode.Output.REJECTED
+                        || cvOutput.getOutput() == ObservationTreeNode.Output.ACCEPTED;
+            }
+        }
+
+        if (node.getActualCounterValue() != ObservationTreeNode.UNKNOWN_COUNTER_VALUE) {
+            if (0 <= node.getActualCounterValue() && node.getActualCounterValue() <= counterLimit) {
+                assert node.getCounterValue() == node.getActualCounterValue();
+            } else {
+                assert node.getCounterValue() == ObservationTreeNode.OUTSIDE_COUNTER_LIMIT;
+            }
+        }
+
+        if (node.getCounterValue() == ObservationTreeNode.OUTSIDE_COUNTER_LIMIT) {
+            assert cvOutput.getOutput() == ObservationTreeNode.Output.REJECTED;
+        } else if (node.getCounterValue() > 0) {
+            assert cvOutput.getOutput() == ObservationTreeNode.Output.REJECTED;
+        }
+
+        if (node.isInTable()) {
+            assert cvOutput.getOutput() != ObservationTreeNode.Output.UNKNOWN;
+        }
+
+        for (ObservationTreeNode<I> successor : node.getSuccessors()) {
+            verifyInvariants(successor, membershipOracle, counterValueOracle, counterLimit);
+        }
     }
 
     private static <I> void checkTable(ObservationTableWithCounterValuesROCA<I> table) {
@@ -98,7 +166,7 @@ public class LStarROCATest {
     }
 
     private <I> void launch(ROCA<?, I> roca, Alphabet<I> alphabet) {
-        RestrictedAutomatonMembershipOracle<I> mOracle = new RestrictedAutomatonROCASimulatorOracle<>(roca);
+        ROCAMembershipOracle<I> mOracle = new ROCASimulatorOracle<>(roca);
         CounterValueOracle<I> counterValueOracle = new CounterValueOracle<>(roca);
         ROCAEquivalenceOracle<I> rocaEqOracle = new ROCASimulatorEQOracle<>(roca);
         RestrictedAutomatonEquivalenceOracle<I> restrictedEqOracle = new RestrictedAutomatonROCASimulatorEQOracle<>(
