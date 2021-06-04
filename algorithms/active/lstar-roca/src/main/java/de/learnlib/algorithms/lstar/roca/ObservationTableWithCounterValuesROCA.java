@@ -1,5 +1,6 @@
 package de.learnlib.algorithms.lstar.roca;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -391,10 +392,12 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
             RowImpl<I> row = createSpRow(sp);
             // createTreeNodes will also fill the counter values when needed
             createTreeNodes(row, suffixes, oracle);
+        }
 
+        for (RowImpl<I> row : shortPrefixRows) {
             for (int i = 0; i < alphabet.size(); i++) {
                 I symbol = alphabet.getSymbol(i);
-                Word<I> lp = sp.append(symbol);
+                Word<I> lp = row.getLabel().append(symbol);
                 RowImpl<I> successorRow = rowMap.get(lp);
                 if (successorRow == null) {
                     successorRow = createLpRow(lp);

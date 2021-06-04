@@ -43,4 +43,7 @@ public class ExampleRegularROCA extends DefaultROCALearningExample<Character> {
         return roca;
     }
     
+    public static ExampleRegularROCA createExample() {
+        return new ExampleRegularROCA();
+    }
 }
