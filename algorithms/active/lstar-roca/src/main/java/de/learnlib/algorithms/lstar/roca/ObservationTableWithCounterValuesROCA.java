@@ -1,11 +1,12 @@
 package de.learnlib.algorithms.lstar.roca;
 
-import java.io.IOException;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -15,11 +16,11 @@ import java.util.stream.Collectors;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import de.learnlib.api.oracle.MembershipOracle;
-import de.learnlib.datastructure.observationtable.Inconsistency;
 import de.learnlib.datastructure.observationtable.MutableObservationTable;
 import de.learnlib.datastructure.observationtable.OTUtils;
 import de.learnlib.datastructure.observationtable.ObservationTable;
 import de.learnlib.datastructure.observationtable.Row;
+import net.automatalib.automata.oca.AcceptanceMode;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
 import net.automatalib.words.impl.Alphabets;
@@ -67,7 +68,7 @@ import net.automatalib.words.impl.Alphabets;
  * @param <I> Input alphabet type
  * @author Gaëtan Staquet
  */
-final public class ObservationTableWithCounterValuesROCA<I> implements MutableObservationTable<I, Boolean> {
+public final class ObservationTableWithCounterValuesROCA<I> implements MutableObservationTable<I, Boolean> {
     private final static int NO_APPROX = -1;
 
     private final List<RowImpl<I>> shortPrefixRows = new ArrayList<>();
@@ -79,10 +80,18 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
     private final ObservationTreeNode<I> observationTreeRoot;
 
-    private final List<Set<Integer>> approx = new ArrayList<>();
-    private final Map<Set<Integer>, Integer> approxToApproxId = new HashMap<>();
+    private Map<Integer, Set<Integer>> approxForShortPrefixes = new HashMap<>();
+    // For long prefixes, we store Approx as the set of short prefixes approx
+    // identifiers
+    private Map<Integer, Set<Integer>> approxForLongPrefixes = new HashMap<>();
     // Approx id -> canonical row
     private final Map<Integer, RowImpl<I>> canonicalRows = new HashMap<>();
+    private final Map<Integer, Map<I, RowImpl<I>>> canonicalSuccessors = new HashMap<>();
+
+    private final Map<BitSet, Set<RowImpl<I>>> sameOutputs = new HashMap<>();
+    private final Map<BitSet, RowImpl<I>> canonicalSameOutputs = new HashMap<>();
+
+    private final Set<RowImpl<I>> updatedRows = new HashSet<>();
 
     private final List<Word<I>> suffixes = new ArrayList<>();
     private final Set<Word<I>> suffixesSet = new HashSet<>();
@@ -91,8 +100,6 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
     private int alphabetSize;
 
     public int counterLimit = -1;
-
-    private boolean initialConsistencyCheckRequired;
 
     private final MembershipOracle.CounterValueOracle<I> counterValueOracle;
 
@@ -200,9 +207,7 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
     @Override
     public int numberOfDistinctRows() {
-        Set<List<PairCounterValueOutput<Boolean>>> distinct = new HashSet<>();
-        allRows.stream().forEach(r -> distinct.add(this.fullRowContents(r)));
-        return distinct.size();
+        return canonicalRows.size();
     }
 
     @Override
@@ -256,7 +261,7 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
     @Override
     public boolean isInitialConsistencyCheckRequired() {
-        return initialConsistencyCheckRequired;
+        return true;
     }
 
     public List<Row<I>> getCanonicalRows() {
@@ -264,44 +269,27 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
     }
 
     @Override
-    public @Nullable Inconsistency<I> findInconsistency() {
+    public @Nullable ApproxInconsistency<I> findInconsistency() {
         final Alphabet<I> alphabet = getInputAlphabet();
 
         // To determine whether the table is consistent, we have to check if there is a
         // row r such that the intersection of all Approx(ua) is empty, with u in
         // Approx(r) and a an input symbol.
-        // If this is the case, r and u are witnesses for inconsistency due to symbol a.
-        // Note that non co-accessible rows are not considered as they have no canonical
-        // rows.
+        // Since we already computed the intersections, we just have to check if a
+        // canonical successor is defined.
         for (RowImpl<I> startRow : canonicalRows.values()) {
             int startApproxId = startRow.getCanonicalId();
-            Set<Integer> startApprox = approx.get(startApproxId);
+            Set<Integer> startApprox = approxForShortPrefixes.get(startApproxId);
             // If the only row in Approx(r) is r, we have nothing to do.
             if (startApprox.size() == 1) {
                 continue;
             }
 
             for (int i = 0; i < alphabet.size(); i++) {
-                RowImpl<I> successorRow = startRow.getSuccessor(i);
-                int successorApproxId = successorRow.getCanonicalId();
-                // If the successor row is co-accessible
-                if (successorApproxId != NO_APPROX) {
-                    Set<Integer> intersection = new HashSet<>();
-                    intersection.addAll(approx.get(successorApproxId));
-
-                    for (Integer equivalentRowId : startApprox) {
-                        RowImpl<I> equivalentRow = allRows.get(equivalentRowId);
-                        RowImpl<I> equivalentSuccessorRow = equivalentRow.getSuccessor(i);
-                        int equivalentSuccessorApproxId = equivalentSuccessorRow.getCanonicalId();
-
-                        if (equivalentSuccessorApproxId != NO_APPROX) {
-                            // Both successors have an approx
-                            intersection.retainAll(approx.get(equivalentSuccessorApproxId));
-                            if (intersection.size() == 0) {
-                                return new Inconsistency<>(startRow, equivalentRow, alphabet.getSymbol(i));
-                            }
-                        }
-                    }
+                I symbol = alphabet.getSymbol(i);
+                Row<I> canonicalSuccessor = getCanonicalSuccessor(startRow, symbol);
+                if (canonicalSuccessor == null && isCoAccessibleRow(startRow.getSuccessor(i))) {
+                    return new ApproxInconsistency<>(startApproxId, symbol, this);
                 }
             }
         }
@@ -320,13 +308,82 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         return null;
     }
 
-    public @Nullable Row<I> getCanonicalRow(Row<I> row) {
-        if (isCoAccessibleRow(row)) {
+    private @Nullable RowImpl<I> getCanonicalRow(Row<I> row) {
+        if (row.isShortPrefixRow()) {
             RowImpl<I> r = allRows.get(row.getRowId());
             return canonicalRows.get(r.getCanonicalId());
         } else {
             return null;
         }
+    }
+
+    /**
+     * Returns the canonical successor for the given row and symbol.
+     * 
+     * If the table is not modified, it is guaranteed that the same row is returned,
+     * given the same row and symbol.
+     * 
+     * @param row    The row
+     * @param symbol The symbol
+     * @return The canonical successor, i.e., a selected row among the possible
+     *         successors.
+     */
+    public @Nullable Row<I> getCanonicalSuccessor(Row<I> row, I symbol) {
+        assert row.isShortPrefixRow();
+        RowImpl<I> r = allRows.get(row.getRowId());
+        if (canonicalSuccessors.containsKey(r.getCanonicalId())) {
+            return canonicalSuccessors.get(r.getCanonicalId()).get(symbol);
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Gets the canonical row for the given approx identifier, assuming the Approx
+     * class in the short prefixes.
+     * 
+     * @param approxId The Approx class identifier
+     * @return The canonical row
+     */
+    @Nullable
+    Row<I> getShortPrefixCanonicalRow(int approxId) {
+        return canonicalRows.get(approxId);
+    }
+
+    /**
+     * Gets all the rows in the Approx class identified by {@code approxId}
+     * 
+     * @param approxId The Approx class identifier
+     * @return All the rows in the class
+     */
+    Set<Row<I>> getRowsInApprox(int approxId) {
+        return approxForShortPrefixes.get(approxId).stream().map(i -> allRows.get(i)).collect(Collectors.toSet());
+    }
+
+    /**
+     * Gets a set with the used Approx classes identifiers for the row's Approx
+     * class.
+     * 
+     * If the row is a short prefix row, then a singleton with the row's Approx id
+     * is returned. Otherwise, a set with the Approx identifiers defining the Approx
+     * class is returned.
+     * 
+     * @param row The row
+     * @return A set with the used Approx classes identifiers
+     */
+    Set<Integer> getUsedApproxClasses(Row<I> row) {
+        RowImpl<I> r = allRows.get(row.getRowId());
+        if (row.isShortPrefixRow()) {
+            return Collections.singleton(r.getCanonicalId());
+        } else if (r.getCanonicalId() != NO_APPROX) {
+            return approxForLongPrefixes.get(r.getCanonicalId());
+        } else {
+            return Collections.emptySet();
+        }
+    }
+
+    Set<Integer> getAllShortPrefixesApproxIds() {
+        return approxForShortPrefixes.keySet();
     }
 
     @Override
@@ -572,47 +629,186 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         }
     }
 
+    public boolean isInInitialClass(Row<I> row) {
+        // We know that '0' is always the row id for epsilon.
+        // So, if the class of row contains 0, it means row is in the same class as
+        // epsilon.
+        RowImpl<I> r = allRows.get(row.getRowId());
+        return approxForShortPrefixes.getOrDefault(r.getCanonicalId(), Collections.emptySet()).contains(0);
+    }
+
     private List<List<Row<I>>> updateCanonicalRows() {
-        Map<Integer, List<Row<I>>> unclosed = new HashMap<>();
+        // First, we retrieve all the rows for which we must (re)compute Approx.
+        Set<RowImpl<I>> shortPrefixesToUpdate = new HashSet<>();
+        Set<RowImpl<I>> longPrefixesToUpdate = new HashSet<>();
+        for (RowImpl<I> row : updatedRows) {
+            for (RowImpl<I> r : sameOutputs.get(row.getOutputs())) {
+                if (r.isShortPrefixRow()) {
+                    shortPrefixesToUpdate.add(r);
+                } else {
+                    longPrefixesToUpdate.add(r);
+                }
+            }
+        }
+
+        Map<Integer, Set<Integer>> newApproxForShortPrefixes = new HashMap<>();
+        Map<Integer, Set<Integer>> newApproxForLongPrefixes = new HashMap<>();
+        Map<Set<Integer>, Integer> newApproxShortPrefixesToApproxId = new HashMap<>();
+        Map<Set<Integer>, Integer> newApproxLongPrefixesToApproxId = new HashMap<>();
+        Set<Integer> freeApproxIdsShortPrefixes = new HashSet<>();
+        freeApproxIdsShortPrefixes.addAll(approxForShortPrefixes.keySet());
+        Set<Integer> freeApproxIdsLongPrefixes = new HashSet<>();
+        freeApproxIdsLongPrefixes.addAll(approxForLongPrefixes.keySet());
 
         canonicalRows.clear();
-        approx.clear();
-        approxToApproxId.clear();
+        canonicalSuccessors.clear();
+
+        // We construct the new Approx classes (and canonical rows) by first copying the
+        // information that is not modified.
+        // We then compute only what is needed
+
+        // We copy the classes that do not have to be modified
         for (RowImpl<I> row : allRows) {
-            // We reset the previously computed canonical id
-            row.setCanonicalId(NO_APPROX);
+            int approxId = NO_APPROX;
+            if (row.isShortPrefixRow() && !shortPrefixesToUpdate.contains(row)) {
+                approxId = row.getCanonicalId();
+                if (!newApproxForShortPrefixes.containsKey(row.getCanonicalId())) {
+                    Set<Integer> approxOfRow = approxForShortPrefixes.get(approxId);
+                    newApproxForShortPrefixes.put(approxId, approxOfRow);
+                    newApproxShortPrefixesToApproxId.put(approxOfRow, approxId);
+                    freeApproxIdsShortPrefixes.remove(approxId);
+                    canonicalRows.put(approxId, row);
+                }
+            } else if (!row.isShortPrefixRow() && !longPrefixesToUpdate.contains(row)) {
+                approxId = row.getCanonicalId();
+                if (approxId != NO_APPROX && !newApproxForLongPrefixes.containsKey(approxId)) {
+                    Set<Integer> approxOfRow = approxForLongPrefixes.get(approxId);
+                    newApproxForLongPrefixes.put(approxId, approxOfRow);
+                    newApproxLongPrefixesToApproxId.put(approxOfRow, approxId);
+                    freeApproxIdsLongPrefixes.remove(approxId);
+                }
+            }
+
+            row.setCanonicalId(approxId);
+        }
+
+        // We compute the new classes for the short prefix rows. We also define a
+        // canonical row for each class.
+        for (RowImpl<I> row : shortPrefixesToUpdate) {
+            Set<Integer> approxOfRow = computeApprox(row);
+
+            // An empty Approx means that the row is unclosed. This is not possible for
+            // short prefixes
+            assert !approxOfRow.isEmpty();
+
+            int approxId = newApproxShortPrefixesToApproxId.getOrDefault(approxOfRow, NO_APPROX);
+            if (approxId == NO_APPROX) {
+                if (freeApproxIdsShortPrefixes.isEmpty()) {
+                    approxId = newApproxForShortPrefixes.size();
+                } else {
+                    Iterator<Integer> itr = freeApproxIdsShortPrefixes.iterator();
+                    approxId = itr.next();
+                    itr.remove();
+                }
+                newApproxForShortPrefixes.put(approxId, approxOfRow);
+                newApproxShortPrefixesToApproxId.put(approxOfRow, approxId);
+                canonicalRows.put(approxId, row);
+            }
+
+            row.setCanonicalId(approxId);
+        }
+
+        // We compute the Approx classes for the long prefixes and seek the unclosed
+        // rows at the same time
+        Map<Integer, List<Row<I>>> unclosed = new HashMap<>();
+        for (RowImpl<I> row : longPrefixesToUpdate) {
             if (isCoAccessibleRow(row)) {
+                int approxId;
                 Set<Integer> approxOfRow = computeApprox(row);
 
-                // If the set of rows approximating the current row is empty, it means we have
-                // an unclosed row
-                if (approxOfRow.size() == 0) {
-                    assert !row.isShortPrefixRow();
+                if (approxOfRow.isEmpty()) {
+                    // The row is unclosed
                     int unclosedId = Objects.hash(fullRowContents(row));
                     if (!unclosed.containsKey(unclosedId)) {
                         unclosed.put(unclosedId, new ArrayList<>());
                     }
                     unclosed.get(unclosedId).add(row);
+                    approxId = NO_APPROX;
                 } else {
-                    Integer approxId = approxToApproxId.get(approxOfRow);
-                    if (approxId == null) {
-                        Integer rowId = approxOfRow.iterator().next();
-                        approxId = approx.size();
-                        approx.add(approxOfRow);
-                        canonicalRows.put(approxId, allRows.get(rowId));
-                        approxToApproxId.put(approxOfRow, approxId);
+                    // We retrieve the classes used by this long prefix.
+                    // That is, for example, instead of having the set {epsilon, a, b}, we want the
+                    // set {0, 1} (where 0 is the class id of epsilon and 1 of a and b).
+                    // @formatter:off
+                    Set<Integer> approxClassesUsed = approxOfRow.stream().
+                        map(i -> allRows.get(i).getCanonicalId()).
+                        collect(Collectors.toSet());
+                    // @formatter:on
+                    approxId = newApproxLongPrefixesToApproxId.getOrDefault(approxClassesUsed, NO_APPROX);
+                    if (approxId == NO_APPROX) {
+                        if (freeApproxIdsLongPrefixes.isEmpty()) {
+                            approxId = newApproxForLongPrefixes.size();
+                        } else {
+                            Iterator<Integer> itr = freeApproxIdsLongPrefixes.iterator();
+                            approxId = itr.next();
+                            itr.remove();
+                        }
+                        newApproxForLongPrefixes.put(approxId, approxClassesUsed);
+                        newApproxLongPrefixesToApproxId.put(approxClassesUsed, approxId);
                     }
-
-                    row.setCanonicalId(approxId);
                 }
-            }
 
+                row.setCanonicalId(approxId);
+            }
         }
 
+        approxForShortPrefixes = newApproxForShortPrefixes;
+        approxForLongPrefixes = newApproxForLongPrefixes;
+
+        // We define the canonical successors of each canonical row.
+        // For each row u and symbol a, we compute the intersection of all Approx(va)
+        // for every v such that Approx(v) = Approx(u).
+        // We then arbitrarily pick a class in the intersection and take its canonical
+        // row.
+        for (RowImpl<I> canonicalRow : canonicalRows.values()) {
+            int approxId = canonicalRow.getCanonicalId();
+            Set<Integer> approxOfRow = approxForShortPrefixes.get(approxId);
+
+            for (int i = 0; i < alphabet.size(); i++) {
+                Set<Integer> intersection = new HashSet<>();
+
+                RowImpl<I> successorRow = canonicalRow.getSuccessor(i);
+                Set<Integer> successorUsedApproxClasses = getUsedApproxClasses(successorRow);
+                intersection.addAll(successorUsedApproxClasses);
+
+                for (int equivalentRowId : approxOfRow) {
+                    RowImpl<I> row = allRows.get(equivalentRowId);
+                    successorRow = row.getSuccessor(i);
+                    if (successorRow.getCanonicalId() != NO_APPROX) {
+                        successorUsedApproxClasses = getUsedApproxClasses(successorRow);
+                        intersection.retainAll(successorUsedApproxClasses);
+
+                        if (intersection.isEmpty()) {
+                            break;
+                        }
+                    }
+                }
+
+                if (!intersection.isEmpty()) {
+                    if (!canonicalSuccessors.containsKey(approxId)) {
+                        canonicalSuccessors.put(approxId, new HashMap<>());
+                    }
+                    int successorApproxId = intersection.iterator().next();
+                    RowImpl<I> canonicalSuccessorRow = canonicalRows.get(successorApproxId);
+                    canonicalSuccessors.get(approxId).put(alphabet.getSymbol(i), canonicalSuccessorRow);
+                }
+            }
+        }
+
+        updatedRows.clear();
         return new ArrayList<>(unclosed.values());
     }
 
-    private Set<Integer> computeApprox(Row<I> row) {
+    private Set<Integer> computeApprox(RowImpl<I> row) {
         // If row is a short prefix, Approx(row) is the set of short prefix rows with
         // exactly the same contents for each suffix.
         // If row is a long prefix, Approx(row) is the set of short prefix rows u such
@@ -621,7 +817,9 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         // equal), for all suffix.
         Set<Integer> result = new HashSet<>();
         List<ObservationTreeNode<I>> rowContents = treeNodes(row);
-        for (Row<I> spRow : getShortPrefixRows()) {
+        Set<RowImpl<I>> spRowsToConsider = sameOutputs.get(row.getOutputs()).stream().filter(r -> r.isShortPrefixRow())
+                .collect(Collectors.toSet());
+        for (RowImpl<I> spRow : spRowsToConsider) {
             List<ObservationTreeNode<I>> spContents = treeNodes(spRow);
             boolean isApprox = true;
             for (int i = 0; i < numberOfSuffixes(); i++) {
@@ -676,22 +874,35 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         ObservationTreeNode<I> prefixNode = row.getNode();
 
         List<ObservationTreeNode<I>> nodes = row.getRowContents();
+        int suffixIndex;
         if (nodes == null) {
+            suffixIndex = 0;
             nodes = new ArrayList<>(suffixes.size());
+        } else {
+            suffixIndex = row.getRowContents().size();
         }
 
         for (Word<I> suffix : suffixes) {
-            nodes.add(prefixNode.addSuffixInTable(suffix, 0, oracle, counterValueOracle, counterLimit));
+            nodes.add(prefixNode.addSuffixInTable(suffix, 0, oracle, counterValueOracle, counterLimit, row,
+                    suffixIndex++));
         }
 
         if (row.getRowContents() == null) {
             row.setRowContents(nodes);
         }
+
+        if (!sameOutputs.containsKey(row.getOutputs())) {
+            sameOutputs.put(row.getOutputs(), new HashSet<>());
+        }
+        sameOutputs.get(row.getOutputs()).add(row);
+        if (!canonicalSameOutputs.containsKey(row.getOutputs())) {
+            canonicalSameOutputs.put(row.getOutputs(), row);
+        }
     }
 
     private RowImpl<I> createSpRow(Word<I> prefix) {
         ObservationTreeNode<I> node = observationTreeRoot.getPrefix(prefix, 0);
-        RowImpl<I> row = new RowImpl<>(numRows++, node, alphabet.size());
+        RowImpl<I> row = new RowImpl<>(numRows++, node, this, alphabet.size());
         allRows.add(row);
         rowMap.put(prefix, row);
         shortPrefixRows.add(row);
@@ -700,7 +911,7 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
     private RowImpl<I> createLpRow(Word<I> prefix) {
         ObservationTreeNode<I> node = observationTreeRoot.getPrefix(prefix, 0);
-        RowImpl<I> row = new RowImpl<>(numRows++, node);
+        RowImpl<I> row = new RowImpl<>(numRows++, node, this);
         allRows.add(row);
         rowMap.put(prefix, row);
         int idx = longPrefixRows.size();
@@ -725,6 +936,8 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
         shortPrefixRows.add(row);
         row.makeShort(alphabet.size());
+
+        updatedRows.add(row);
     }
 
     private boolean isCoAccessibleRow(Row<I> row) {
@@ -739,5 +952,45 @@ final public class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
     ObservationTreeNode<I> getObservationTreeRoot() {
         return observationTreeRoot;
+    }
+
+    void removeOutputs(RowImpl<I> row) {
+        BitSet outputs = row.getOutputs();
+        if (sameOutputs.containsKey(outputs)) {
+            Set<RowImpl<I>> sameOut = sameOutputs.get(outputs);
+            sameOut.remove(row);
+            if (sameOut.size() == 0) {
+                sameOutputs.remove(outputs);
+                if (canonicalSameOutputs.get(outputs) == row) {
+                    canonicalSameOutputs.remove(outputs);
+                }
+            } else if (canonicalSameOutputs.get(outputs) == row) {
+                Iterator<RowImpl<I>> itr = sameOut.iterator();
+                RowImpl<I> next;
+                while (itr.hasNext() && !(next = itr.next()).isShortPrefixRow()) {
+                    canonicalSameOutputs.put(outputs, next);
+                }
+            }
+        }
+    }
+
+    void addOutputs(RowImpl<I> row) {
+        BitSet outputs = row.getOutputs();
+        if (!sameOutputs.containsKey(outputs)) {
+            HashSet<RowImpl<I>> set = new HashSet<>();
+            set.add(row);
+            sameOutputs.put(outputs, set);
+        } else {
+            sameOutputs.get(outputs).add(row);
+        }
+
+        if (row.isShortPrefixRow() && !canonicalSameOutputs.containsKey(outputs)) {
+            canonicalSameOutputs.put(outputs, row);
+        }
+        updatedRows.add(row);
+    }
+
+    void changedCounterValue(RowImpl<I> row) {
+        updatedRows.add(row);
     }
 }

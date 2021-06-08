@@ -6,13 +6,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import de.learnlib.api.algorithm.feature.GlobalSuffixLearner;
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.query.DefaultQuery;
-import de.learnlib.datastructure.observationtable.Inconsistency;
 import de.learnlib.datastructure.observationtable.OTLearner;
 import de.learnlib.datastructure.observationtable.Row;
 import de.learnlib.util.MQUtil;
@@ -94,7 +94,8 @@ public final class LStarROCA<I>
     @Override
     public void startLearning() {
         // During the first round, we only want to test if the language is empty
-        // Since the hypothesis is initialized as an ROCA accepting nothing, we do not have to do anything
+        // Since the hypothesis is initialized as an ROCA accepting nothing, we do not
+        // have to do anything
     }
 
     @Override
@@ -112,6 +113,7 @@ public final class LStarROCA<I>
             .max(Integer::compare)
             .get();
         // @formatter:on
+        System.out.println("Counter limit: " + counterLimit);
 
         // 2. We increase the counter limit in the oracles
         restrictedAutomatonEquivalenceOracle.setCounterLimit(counterLimit);
@@ -199,13 +201,13 @@ public final class LStarROCA<I>
             }
 
             if (checkConsistency) {
-                Inconsistency<I> inconsistency;
+                ApproxInconsistency<I> inconsistency;
 
                 do {
                     inconsistency = table.findInconsistency();
                     if (inconsistency != null) {
-                        Word<I> newSuffix = analyzeInconsistency(inconsistency);
-                        unclosedIter = table.addSuffix(newSuffix, membershipOracle);
+                        Set<Word<I>> newSuffix = analyzeInconsistency(inconsistency);
+                        unclosedIter = table.addSuffixes(newSuffix, membershipOracle);
                     }
                 } while (unclosedIter.isEmpty() && inconsistency != null);
             }
@@ -226,40 +228,18 @@ public final class LStarROCA<I>
         return closingRows;
     }
 
-    private Word<I> analyzeInconsistency(Inconsistency<I> inconsistency) {
-        int inputIdx = alphabet.getSymbolIndex(inconsistency.getSymbol());
-        I sym = alphabet.getSymbol(inputIdx);
+    private Set<Word<I>> analyzeInconsistency(ApproxInconsistency<I> inconsistency) {
+        List<Word<I>> knownSuffixes = table.getSuffixes();
+        Set<Word<I>> suffixes = inconsistency.getAllSuffixes().stream().filter(s -> !knownSuffixes.contains(s))
+                .collect(Collectors.toSet());
 
-        Row<I> successorRow1 = inconsistency.getFirstRow().getSuccessor(inputIdx);
-        Row<I> successorRow2 = inconsistency.getSecondRow().getSuccessor(inputIdx);
-
-        int numSuffixes = table.getSuffixes().size();
-
-        for (int i = 0; i < numSuffixes; i++) {
-            Word<I> suffix = table.getSuffixes().get(i);
-            Word<I> newSuffix = suffix.prepend(sym);
-            PairCounterValueOutput<Boolean> val1 = table.fullCellContents(successorRow1, i);
-            PairCounterValueOutput<Boolean> val2 = table.fullCellContents(successorRow2, i);
-
-            // If both of the successors are short prefix rows, the inconsistency occurs when one of the cells differ.
-            // Otherwise, we have to check that the counter values are both not UNKNOWN_COUNTER_VALUE.
-            if (successorRow1.isShortPrefixRow() && successorRow2.isShortPrefixRow()) {
-                if (!Objects.equals(val1, val2)) {
-                    if (!table.getSuffixes().contains(newSuffix)) {
-                        return newSuffix;
-                    }
-                }
-            }
-            else {
-                if (!Objects.equals(val1.getOutput(), val2.getOutput()) || (val1.getCounterValue() != ObservationTreeNode.UNKNOWN_COUNTER_VALUE && val2.getCounterValue() != ObservationTreeNode.UNKNOWN_COUNTER_VALUE && val1.getCounterValue() != val2.getCounterValue())) {
-                    if (!table.getSuffixes().contains(newSuffix)) {
-                        return newSuffix;
-                    }
-                }
-            }
+        if (suffixes.isEmpty()) {
+            throw new IllegalArgumentException("Bogus inconsistency: "
+                    + inconsistency.getApproxId() + " (" + table.getRowsInApprox(inconsistency.getApproxId()).stream()
+                            .map(r -> r.getLabel()).collect(Collectors.toList())
+                    + ") for symbol " + inconsistency.getSymbol());
         }
-
-        throw new IllegalArgumentException("Bogus inconsistency: " + inconsistency.getFirstRow().getLabel() + " and " + inconsistency.getSecondRow().getLabel() + " for symbol " + inconsistency.getSymbol());
+        return suffixes;
     }
 
     @Override
@@ -298,7 +278,7 @@ public final class LStarROCA<I>
         hypothesis = new DefaultAutomatonWithCounterValuesROCA<>(alphabet);
 
         for (Row<I> sp : table.getCanonicalRows()) {
-            int id = sp.getRowContentId();
+            int id = sp.getRowId();
             StateInfo<DefaultAutomatonWithCounterValuesState, I> info = stateInfos.getOrDefault(id, null);
             PairCounterValueOutput<Boolean> cell = table.fullCellContents(sp, 0);
             boolean acceptance = cell.getOutput();
@@ -310,7 +290,7 @@ public final class LStarROCA<I>
                 }
             } else {
                 DefaultAutomatonWithCounterValuesState state;
-                if (sp.getLabel().equals(Word.epsilon())) {
+                if (table.isInInitialClass(sp)) {
                     state = hypothesis.addInitialState(acceptance, 0);
                 } else {
                     state = hypothesis.addState(acceptance, counterValue);
@@ -326,14 +306,12 @@ public final class LStarROCA<I>
 
             for (int i = 0; i < alphabet.size(); i++) {
                 I input = alphabet.getSymbol(i);
-                Row<I> successor = sp.getSuccessor(i);
+                Row<I> successor = table.getCanonicalSuccessor(sp, input);
                 if (successor != null) {
-                    Row<I> canSuccessor = table.getCanonicalRow(successor);
-                    if (canSuccessor != null) {
-                        int successorId = canSuccessor.getRowContentId();
-                        DefaultAutomatonWithCounterValuesState successorState = stateInfos.get(successorId).getState();
-                        hypothesis.setTransition(state, input, successorState);
-                    }
+                    int successorId = successor.getRowId();
+                    assert stateInfos.containsKey(successorId) : stateInfos.keySet() + " " + successorId;
+                    DefaultAutomatonWithCounterValuesState successorState = stateInfos.get(successorId).getState();
+                    hypothesis.setTransition(state, input, successorState);
                 }
             }
         }

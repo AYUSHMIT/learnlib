@@ -1,5 +1,6 @@
 package de.learnlib.algorithms.lstar.roca;
 
+import java.util.BitSet;
 import java.util.List;
 
 import de.learnlib.datastructure.observationtable.Row;
@@ -20,14 +21,18 @@ class RowImpl<I> implements Row<I> {
     private ResizingArrayStorage<RowImpl<I>> successors;
 
     private List<ObservationTreeNode<I>> rowContents;
+    private BitSet outputs = new BitSet();
 
-    RowImpl(int rowId, ObservationTreeNode<I> node) {
+    private final ObservationTableWithCounterValuesROCA<I> table;
+
+    RowImpl(int rowId, ObservationTreeNode<I> node, ObservationTableWithCounterValuesROCA<I> table) {
         this.rowId = rowId;
         this.node = node;
+        this.table = table;
     }
 
-    RowImpl(int rowId, ObservationTreeNode<I> node, int alphabetSize) {
-        this(rowId, node);
+    RowImpl(int rowId, ObservationTreeNode<I> node, ObservationTableWithCounterValuesROCA<I> table, int alphabetSize) {
+        this(rowId, node, table);
 
         makeShort(alphabetSize);
     }
@@ -104,5 +109,19 @@ class RowImpl<I> implements Row<I> {
     @Override
     public boolean hasContents() {
         return getRowContents() != null;
+    }
+
+    public BitSet getOutputs() {
+        return (BitSet)outputs.clone();
+    }
+
+    public void setOutput(int suffixIndex) {
+        table.removeOutputs(this);
+        outputs.set(suffixIndex, true);
+        table.addOutputs(this);
+    }
+
+    public void setCounterValue(int suffixIndex, int counterValue) {
+        table.changedCounterValue(this);
     }
 }
