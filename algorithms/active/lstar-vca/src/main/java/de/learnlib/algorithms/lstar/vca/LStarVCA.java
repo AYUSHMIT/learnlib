@@ -14,7 +14,6 @@ import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.datastructure.observationtable.Inconsistency;
 import de.learnlib.datastructure.observationtable.OTLearner;
 import de.learnlib.datastructure.observationtable.Row;
-import de.learnlib.util.MQUtil;
 import net.automatalib.SupportsGrowingAlphabet;
 import net.automatalib.automata.oca.VCA;
 import net.automatalib.automata.oca.automatoncountervalues.DefaultAutomatonWithCounterValuesState;
@@ -128,9 +127,6 @@ public class LStarVCA<I>
 
     @Override
     public boolean refineHypothesis(DefaultQuery<I, Boolean> ceQuery) {
-        if (!MQUtil.isCounterexample(ceQuery, hypothesis)) {
-            return false;
-        }
 
         // 1. We compute the new counter limit
         counterLimit = OCAUtil.computeMaximalCounterValue(ceQuery.getInput(), alphabet);
