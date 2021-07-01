@@ -27,6 +27,7 @@ import net.automatalib.util.tries.PrefixTrie;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.impl.Alphabets;
 import net.automatalib.words.impl.Symbol;
+import de.learnlib.algorithms.lstar.roca.ObservationTreeNode.Output;
 
 public class LStarROCATest {
     private static <I> void testLearnROCA(ROCA<?, I> target, Alphabet<I> alphabet, LStarROCA<I> learner,
@@ -89,56 +90,56 @@ public class LStarROCATest {
         PairCounterValueOutput<ObservationTreeNode.Output> cvOutput = node.getCvOutput();
         PairCounterValueOutput<ObservationTreeNode.Output> actualCvOutput = node.getActualCvOutput();
         if (cvOutput.getOutput() == ObservationTreeNode.Output.ACCEPTED) {
-            assert node.isInPrefix();
+            Assert.assertTrue(node.isInPrefix());
         }
 
         if (node.getParent() != null) {
             if (!node.getParent().inPrefix) {
-                assert !node.isInPrefix();
+                Assert.assertFalse(node.isInPrefix());
             }
 
             if (node.getParent().getCounterValue() == ObservationTreeNode.OUTSIDE_COUNTER_LIMIT) {
-                assert node.getCounterValue() == ObservationTreeNode.OUTSIDE_COUNTER_LIMIT;
+                Assert.assertEquals(node.getCounterValue(), ObservationTreeNode.OUTSIDE_COUNTER_LIMIT);
             }
         }
 
         if (node.isInTable() && node.isInPrefix()) {
-            assert node.getCounterValue() != ObservationTreeNode.OUTSIDE_COUNTER_LIMIT;
-            assert cvOutput.getOutput() != ObservationTreeNode.Output.UNKNOWN;
+            Assert.assertNotEquals(node.getCounterValue(), ObservationTreeNode.OUTSIDE_COUNTER_LIMIT);
+            Assert.assertNotEquals(cvOutput.getOutput(), Output.UNKNOWN);
         }
 
         if (node.isInPrefix()) {
-            if (cvOutput.getOutput() != ObservationTreeNode.Output.UNKNOWN) {
-                assert node.getCounterValue() != ObservationTreeNode.UNKNOWN_COUNTER_VALUE;
+            if (cvOutput.getOutput() != Output.UNKNOWN) {
+                Assert.assertNotEquals(node.getClass(), ObservationTreeNode.UNKNOWN_COUNTER_VALUE);
             }
-            assert node.getCounterValue() != ObservationTreeNode.OUTSIDE_COUNTER_LIMIT;
+            Assert.assertNotEquals(node.getCounterValue(), ObservationTreeNode.OUTSIDE_COUNTER_LIMIT);
         }
 
-        if (actualCvOutput.getOutput() != ObservationTreeNode.Output.UNKNOWN) {
-            if (actualCvOutput.getOutput() == ObservationTreeNode.Output.REJECTED) {
-                assert cvOutput.getOutput() == ObservationTreeNode.Output.REJECTED;
+        if (actualCvOutput.getOutput() != Output.UNKNOWN) {
+            if (actualCvOutput.getOutput() == Output.REJECTED) {
+                Assert.assertEquals(cvOutput.getOutput(), Output.REJECTED);
             } else {
-                assert cvOutput.getOutput() == ObservationTreeNode.Output.REJECTED
-                        || cvOutput.getOutput() == ObservationTreeNode.Output.ACCEPTED;
+                Assert.assertTrue(cvOutput.getOutput() == Output.REJECTED
+                        || cvOutput.getOutput() == Output.ACCEPTED);
             }
         }
 
         if (node.getActualCounterValue() != ObservationTreeNode.UNKNOWN_COUNTER_VALUE) {
             if (0 <= node.getActualCounterValue() && node.getActualCounterValue() <= counterLimit) {
-                assert node.getCounterValue() == node.getActualCounterValue();
+                Assert.assertEquals(node.getCounterValue(), node.getActualCounterValue());
             } else {
-                assert node.getCounterValue() == ObservationTreeNode.OUTSIDE_COUNTER_LIMIT;
+                Assert.assertEquals(node.getCounterValue(), ObservationTreeNode.OUTSIDE_COUNTER_LIMIT);
             }
         }
 
         if (node.getCounterValue() == ObservationTreeNode.OUTSIDE_COUNTER_LIMIT) {
-            assert cvOutput.getOutput() == ObservationTreeNode.Output.REJECTED;
+            Assert.assertEquals(cvOutput.getOutput(), Output.REJECTED);
         } else if (node.getCounterValue() > 0) {
-            assert cvOutput.getOutput() == ObservationTreeNode.Output.REJECTED;
+            Assert.assertEquals(cvOutput.getOutput(), Output.REJECTED);
         }
 
         if (node.isInTable()) {
-            assert cvOutput.getOutput() != ObservationTreeNode.Output.UNKNOWN;
+            Assert.assertNotEquals(cvOutput.getOutput(), Output.UNKNOWN);
         }
 
         for (ObservationTreeNode<I> successor : node.getSuccessors()) {
