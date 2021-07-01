@@ -46,18 +46,18 @@ import net.automatalib.words.impl.Alphabets;
  * 
  * @author Gaëtan Staquet
  */
-public final class LStarROCA<I>
+public class LStarROCA<I>
         implements OTLearner.OTLearnerROCA<I>, GlobalSuffixLearner<ROCA<?, I>, I, Boolean>, SupportsGrowingAlphabet<I> {
 
-    private final Alphabet<I> alphabet;
+    protected final Alphabet<I> alphabet;
 
-    private final MembershipOracle.ROCAMembershipOracle<I> membershipOracle;
-    private final MembershipOracle.CounterValueOracle<I> counterValueOracle;
-    private final EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> restrictedAutomatonEquivalenceOracle;
+    protected final MembershipOracle.ROCAMembershipOracle<I> membershipOracle;
+    protected final MembershipOracle.CounterValueOracle<I> counterValueOracle;
+    protected final EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> restrictedAutomatonEquivalenceOracle;
 
-    private final ObservationTableWithCounterValuesROCA<I> table;
-    private DefaultAutomatonWithCounterValuesROCA<I> hypothesis;
-    private int counterLimit;
+    protected final ObservationTableWithCounterValuesROCA<I> table;
+    protected DefaultAutomatonWithCounterValuesROCA<I> hypothesis;
+    protected int counterLimit;
 
     public LStarROCA(MembershipOracle.ROCAMembershipOracle<I> membershipOracle,
             MembershipOracle.CounterValueOracle<I> counterValueOracle,
@@ -113,7 +113,6 @@ public final class LStarROCA<I>
             .max(Integer::compare)
             .get();
         // @formatter:on
-        System.out.println("Counter limit: " + counterLimit);
 
         // 2. We increase the counter limit in the oracles
         restrictedAutomatonEquivalenceOracle.setCounterLimit(counterLimit);
@@ -147,7 +146,7 @@ public final class LStarROCA<I>
     /**
      * Learns the DFA for the restricted language up to the counter limit.
      */
-    private void learnDFA() {
+    protected void learnDFA() {
         while (true) {
             updateHypothesis();
             DefaultQuery<I, Boolean> ce = restrictedAutomatonEquivalenceOracle.findCounterExample(hypothesis, alphabet);
@@ -186,11 +185,11 @@ public final class LStarROCA<I>
         return hypothesis.accepts(word) != output;
     }
 
-    private List<Word<I>> initialSuffixes() {
+    protected List<Word<I>> initialSuffixes() {
         return Collections.singletonList(Word.epsilon());
     }
 
-    private boolean completeConsistentTable(List<List<Row<I>>> unclosed, boolean checkConsistency) {
+    protected boolean completeConsistentTable(List<List<Row<I>>> unclosed, boolean checkConsistency) {
         boolean refined = false;
         List<List<Row<I>>> unclosedIter = unclosed;
         do {
@@ -230,14 +229,14 @@ public final class LStarROCA<I>
 
     private Set<Word<I>> analyzeInconsistency(ApproxInconsistency<I> inconsistency) {
         List<Word<I>> knownSuffixes = table.getSuffixes();
-        Set<Word<I>> suffixes = inconsistency.getAllSuffixes().stream().filter(s -> !knownSuffixes.contains(s))
-                .collect(Collectors.toSet());
+        // @formatter:off
+        Set<Word<I>> suffixes = inconsistency.getAllSuffixes().stream().
+            filter(s -> !knownSuffixes.contains(s))
+            .collect(Collectors.toSet());
+        // @formatter:on
 
         if (suffixes.isEmpty()) {
-            throw new IllegalArgumentException("Bogus inconsistency: "
-                    + inconsistency.getApproxId() + " (" + table.getRowsInApprox(inconsistency.getApproxId()).stream()
-                            .map(r -> r.getLabel()).collect(Collectors.toList())
-                    + ") for symbol " + inconsistency.getSymbol());
+            throw new IllegalArgumentException("Bogus inconsistency");
         }
         return suffixes;
     }
@@ -271,13 +270,13 @@ public final class LStarROCA<I>
         return hypothesis.asAutomaton();
     }
 
-    private void updateHypothesis() {
+    protected void updateHypothesis() {
         assert table.isInitialized();
 
         Map<Integer, StateInfo<DefaultAutomatonWithCounterValuesState, I>> stateInfos = new HashMap<>();
         hypothesis = new DefaultAutomatonWithCounterValuesROCA<>(alphabet);
 
-        for (Row<I> sp : table.getCanonicalRows()) {
+        for (Row<I> sp : table.getCanonicalShortPrefixRows()) {
             int id = sp.getRowId();
             StateInfo<DefaultAutomatonWithCounterValuesState, I> info = stateInfos.getOrDefault(id, null);
             PairCounterValueOutput<Boolean> cell = table.fullCellContents(sp, 0);

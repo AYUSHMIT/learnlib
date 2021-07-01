@@ -137,6 +137,9 @@ class ObservationTreeNode<I> {
 
     @Nullable
     ObservationTreeNode<I> getSuccessor(I symbol) {
+        if (!alphabet.containsSymbol(symbol)) {
+            return null;
+        }
         return successors.get(alphabet.getSymbolIndex(symbol));
     }
 
@@ -272,8 +275,6 @@ class ObservationTreeNode<I> {
             // known).
             // In that case, we ask a membership query. Two cases can arise.
             if (cvOutput.getOutput() == Output.UNKNOWN) {
-                assert actualCvOutput.getOutput() == Output.UNKNOWN;
-
                 boolean actualOutput = membershipOracle.answerQuery(prefix);
                 setActualOutput(actualOutput);
 
@@ -336,17 +337,18 @@ class ObservationTreeNode<I> {
                                 // So, we know that the word is in L_l and we can ask a counter value query.
                                 // Moreover, we have to update the ancestors to reflect the newly found prefix
                                 // of the language.
+                                inPrefix = true;
+
                                 setOutput(true);
+
                                 int actualCounterValue = counterValueOracle.answerQuery(prefix);
                                 assert actualCounterValue <= counterLimit;
                                 setActualCounterValue(actualCounterValue);
                                 setCounterValue(actualCounterValue);
-                                assert getCounterValue() == 0;
                                 if (parent != null) {
                                     assert parent.getCounterValue() != OUTSIDE_COUNTER_LIMIT;
                                 }
 
-                                inPrefix = true;
                                 if (parent != null) {
                                     parent.inPrefixUpdate(membershipOracle, counterValueOracle, counterLimit);
                                 }
@@ -414,13 +416,13 @@ class ObservationTreeNode<I> {
                     // So, we know that the word is in L_l and we can ask a counter value query.
                     // Moreover, we have to update the ancestors to reflect the newly found prefix
                     // of the language.
+                    inPrefix = true;
+
                     setOutput(true);
                     int actualCounterValue = counterValueOracle.answerQuery(prefix);
                     setActualCounterValue(actualCounterValue);
                     setCounterValue(actualCounterValue);
-                    assert getCounterValue() == 0;
 
-                    inPrefix = true;
                     if (parent != null) {
                         parent.inPrefixUpdate(membershipOracle, counterValueOracle, counterLimit);
                     }
@@ -452,7 +454,7 @@ class ObservationTreeNode<I> {
     }
 
     private List<ObservationTreeNode<I>> getAncestorsStartingFromLastKnownCounterValue() {
-        if (getCounterValue() != UNKNOWN_COUNTER_VALUE) {
+        if (getActualCounterValue() != UNKNOWN_COUNTER_VALUE) {
             List<ObservationTreeNode<I>> l = new ArrayList<>();
             l.add(this);
             return l;
@@ -497,7 +499,7 @@ class ObservationTreeNode<I> {
         List<ObservationTreeNode<I>> ancestors = getAncestorsStartingFromLastKnownCounterValue();
         int currentAncestorId = 0;
         while (currentAncestorId < ancestors.size()) {
-            int counterValueAncestor = ancestors.get(currentAncestorId).getCounterValue();
+            int counterValueAncestor = ancestors.get(currentAncestorId).getActualCounterValue();
             // The first ancestor must have a known counter value
             assert counterValueAncestor != UNKNOWN_COUNTER_VALUE;
 
@@ -526,7 +528,9 @@ class ObservationTreeNode<I> {
                 return true;
             } else {
                 currentAncestorId = firstPotentialOutsideCVAncestorIndex;
-                potentialOutsideCVAncestor.setCounterValue(actualCounterValueAncestor);
+                if (isInPrefix()) {
+                    potentialOutsideCVAncestor.setCounterValue(actualCounterValueAncestor);
+                }
                 if (actualCounterValueAncestor > 0) {
                     potentialOutsideCVAncestor.setOutput(false);
                 }
@@ -561,34 +565,39 @@ class ObservationTreeNode<I> {
     void increaseCounterLimit(MembershipOracle<I, Boolean> membershipOracle,
             MembershipOracle<I, Integer> counterValueOracle, int counterLimit) {
         if (getCounterValue() == OUTSIDE_COUNTER_LIMIT && getActualCounterValue() <= counterLimit) {
-            if (parent == null || parent.getCounterValue() != OUTSIDE_COUNTER_LIMIT) {
-                setCounterValue(getActualCounterValue());
+            if (actualCvOutput.getOutput() == Output.UNKNOWN) {
+                boolean output = membershipOracle.answerQuery(prefix);
+                setActualOutput(output);
+            }
 
-                if (actualCvOutput.getOutput() == Output.UNKNOWN) {
-                    boolean output = membershipOracle.answerQuery(prefix);
-                    setActualOutput(output);
-                }
+            if (!determineIfAncestorExceedsCounterLimit(counterValueOracle, counterLimit)) {
+                setOutput(getActualOutput());
 
-                if (!determineIfAncestorExceedsCounterLimit(counterValueOracle, counterLimit)) {
-                    setOutput(getActualOutput());
+                if (getOutput()) {
+                    inPrefix = true;
 
-                    if (getOutput()) {
-                        inPrefix = true;
-
-                        if (getCounterValue() == UNKNOWN_COUNTER_VALUE) {
-                            int counterValue = counterValueOracle.answerQuery(prefix);
-                            assert counterValue <= counterLimit;
-                            setCounterValue(counterValue);
-                            setActualCounterValue(counterValue);
-                            if (parent != null) {
-                                assert parent.getCounterValue() != OUTSIDE_COUNTER_LIMIT;
-                            }
-                        }
-
+                    if (getActualCounterValue() != UNKNOWN_COUNTER_VALUE) {
+                        setCounterValue(getActualCounterValue());
+                    }
+                    else {
+                        int counterValue = counterValueOracle.answerQuery(prefix);
+                        assert counterValue <= counterLimit;
+                        setCounterValue(counterValue);
+                        setActualCounterValue(counterValue);
                         if (parent != null) {
-                            parent.inPrefixUpdate(membershipOracle, counterValueOracle, counterLimit);
+                            assert parent.getCounterValue() != OUTSIDE_COUNTER_LIMIT;
                         }
                     }
+
+                    if (parent != null) {
+                        parent.inPrefixUpdate(membershipOracle, counterValueOracle, counterLimit);
+                    }
+                }
+                else if (isInPrefix() && getActualCounterValue() != UNKNOWN_COUNTER_VALUE) {
+                    setCounterValue(getActualCounterValue());
+                }
+                else if (getCounterValue() == OUTSIDE_COUNTER_LIMIT) {
+                    setCounterValue(UNKNOWN_COUNTER_VALUE);
                 }
             }
         }
