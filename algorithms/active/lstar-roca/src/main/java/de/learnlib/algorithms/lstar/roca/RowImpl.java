@@ -1,6 +1,6 @@
 package de.learnlib.algorithms.lstar.roca;
 
-import java.util.BitSet;
+import java.util.ArrayList;
 import java.util.List;
 
 import de.learnlib.datastructure.observationtable.Row;
@@ -10,24 +10,27 @@ import net.automatalib.words.Word;
 /**
  * An implementation of a row for {@link ObservationTableWithCounterValuesROCA}.
  * 
+ * A row has a list of {@link ObservationTreeNode}s that are used to store the row contents.
+ * 
  * @author Gaëtan Staquet
  */
 class RowImpl<I> implements Row<I> {
     private final int rowId;
     private final ObservationTreeNode<I> node;
 
-    private int canonicalId = -1;
+    private int approxId = -1;
     private int lpIndex;
+    private int sameOutputsId = -1;
     private ResizingArrayStorage<RowImpl<I>> successors;
 
-    private List<ObservationTreeNode<I>> rowContents;
-    private BitSet outputs = new BitSet();
+    private final List<ObservationTreeNode<I>> nodes;
 
     private final ObservationTableWithCounterValuesROCA<I> table;
 
     RowImpl(int rowId, ObservationTreeNode<I> node, ObservationTableWithCounterValuesROCA<I> table) {
         this.rowId = rowId;
         this.node = node;
+        this.nodes = new ArrayList<>();
         this.table = table;
     }
 
@@ -47,8 +50,12 @@ class RowImpl<I> implements Row<I> {
         return rowId;
     }
 
-    public int getCanonicalId() {
-        return canonicalId;
+    public int getApproxId() {
+        return approxId;
+    }
+
+    public int getSameOutputsId() {
+        return sameOutputsId;
     }
 
     public ObservationTreeNode<I> getNode() {
@@ -83,7 +90,11 @@ class RowImpl<I> implements Row<I> {
     }
 
     void setCanonicalId(int canonicalId) {
-        this.canonicalId = canonicalId;
+        this.approxId = canonicalId;
+    }
+
+    void setSameOutputsId(int sameOutputsId) {
+        this.sameOutputsId = sameOutputsId;
     }
 
     void setLpIndex(int lpIndex) {
@@ -98,30 +109,70 @@ class RowImpl<I> implements Row<I> {
         successors.ensureCapacity(capacity);
     }
 
-    List<ObservationTreeNode<I>> getRowContents() {
-        return rowContents;
+    List<PairCounterValueOutput<Boolean>> getRowContents() {
+        List<PairCounterValueOutput<Boolean>> cvOutputs = new ArrayList<>(nodes.size());
+        for (int i = 0 ; i < numberOfSuffixes() ; i++) {
+            ObservationTreeNode<I> node = nodes.get(i);
+            if (!table.isSuffixOnlyForLanguage(i)) {
+                PairCounterValueOutput<Boolean> cvOutput = node.getCounterValueOutput();
+                cvOutputs.add(cvOutput);
+            }
+        }
+
+        return cvOutputs;
     }
 
-    void setRowContents(List<ObservationTreeNode<I>> contents) {
-        this.rowContents = contents;
+    List<PairCounterValueOutput<Boolean>> getWholeRowContents() {
+        List<PairCounterValueOutput<Boolean>> cvOutputs = new ArrayList<>(nodes.size());
+        for (int i = 0 ; i < numberOfSuffixes() ; i++) {
+            ObservationTreeNode<I> node  = nodes.get(i);
+            if (table.isSuffixOnlyForLanguage(i)) {
+                cvOutputs.add(new PairCounterValueOutput<>(node.getOutput(), -2));
+            }
+            else {
+                cvOutputs.add(node.getCounterValueOutput());
+            }
+        }
+        return cvOutputs;
+    }
+
+    List<Boolean> getOutputs() {
+        List<Boolean> outputs = new ArrayList<>();
+        for (int i = 0 ; i < numberOfSuffixes() ; i++) {
+            ObservationTreeNode<I> node = nodes.get(i);
+            if (!table.isSuffixOnlyForLanguage(i)) {
+                outputs.add(node.getOutput());
+            }
+        }
+        return outputs;
+    }
+
+    int getCounterValue() {
+        return node.getCounterValue();
+    }
+
+    void addSuffix(ObservationTreeNode<I> node) {
+        nodes.add(node);
+    }
+
+    int numberOfSuffixes() {
+        return nodes.size();
     }
 
     @Override
     public boolean hasContents() {
-        return getRowContents() != null;
+        return !getRowContents().isEmpty();
     }
 
-    public BitSet getOutputs() {
-        return (BitSet)outputs.clone();
+    void updateOutput() {
+        table.updateOutputs(this);
     }
 
-    public void setOutput(int suffixIndex) {
-        table.removeOutputs(this);
-        outputs.set(suffixIndex, true);
-        table.addOutputs(this);
-    }
-
-    public void setCounterValue(int suffixIndex, int counterValue) {
+    void updateCounterValue() {
         table.changedCounterValue(this);
+    }
+
+    ObservationTableWithCounterValuesROCA<I> getTable() {
+        return table;
     }
 }

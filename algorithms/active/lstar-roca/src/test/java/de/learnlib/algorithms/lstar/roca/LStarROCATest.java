@@ -1,6 +1,9 @@
 package de.learnlib.algorithms.lstar.roca;
 
+import static de.learnlib.algorithms.lstar.roca.ObservationTableWithCounterValuesROCA.UNKNOWN_COUNTER_VALUE;
+
 import java.util.Collection;
+import java.util.List;
 
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -18,16 +21,16 @@ import de.learnlib.examples.roca.ExampleRegularROCA;
 import de.learnlib.examples.roca.ExampleTinyROCA;
 import de.learnlib.oracle.equivalence.roca.ROCASimulatorEQOracle;
 import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonROCASimulatorEQOracle;
-import de.learnlib.oracle.membership.roca.CounterValueOracle;
 import de.learnlib.oracle.membership.SimulatorOracle.ROCASimulatorOracle;
+import de.learnlib.oracle.membership.roca.CounterValueOracle;
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.oca.ROCA;
+import net.automatalib.incremental.dfa.Acceptance;
+import net.automatalib.incremental.dfa.tree.IncrementalPCDFATreeBuilder;
 import net.automatalib.util.automata.oca.OCAUtil;
-import net.automatalib.util.tries.PrefixTrie;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.impl.Alphabets;
 import net.automatalib.words.impl.Symbol;
-import de.learnlib.algorithms.lstar.roca.ObservationTreeNode.Output;
 
 public class LStarROCATest {
     private static <I> void testLearnROCA(ROCA<?, I> target, Alphabet<I> alphabet, LStarROCA<I> learner,
@@ -40,7 +43,7 @@ public class LStarROCATest {
         Assert.assertTrue(OCAUtil.testEquivalence(target, learnt, alphabet));
 
         ObservationTableWithCounterValuesROCA<I> table = learner.getObservationTable();
-        checkTable(table);
+        checkPrefixTable(table);
     }
 
     private static <I> ROCA<?, I> run(ROCA<?, I> target, Alphabet<I> alphabet, LStarROCA<I> learner,
@@ -87,59 +90,30 @@ public class LStarROCATest {
      */
     private static <I> void verifyInvariants(ObservationTreeNode<I> node, MembershipOracle<I, Boolean> membershipOracle,
             MembershipOracle<I, Integer> counterValueOracle, int counterLimit) {
-        PairCounterValueOutput<ObservationTreeNode.Output> cvOutput = node.getCvOutput();
-        PairCounterValueOutput<ObservationTreeNode.Output> actualCvOutput = node.getActualCvOutput();
-        if (cvOutput.getOutput() == ObservationTreeNode.Output.ACCEPTED) {
+        if (node.getOutput()) {
             Assert.assertTrue(node.isInPrefix());
         }
 
         if (node.getParent() != null) {
-            if (!node.getParent().inPrefix) {
+            if (!node.getParent().isInPrefix()) {
                 Assert.assertFalse(node.isInPrefix());
             }
 
-            if (node.getParent().getCounterValue() == ObservationTreeNode.OUTSIDE_COUNTER_LIMIT) {
-                Assert.assertEquals(node.getCounterValue(), ObservationTreeNode.OUTSIDE_COUNTER_LIMIT);
+            if (node.getParent().isOutsideCounterLimit()) {
+                Assert.assertTrue(node.isOutsideCounterLimit());
             }
         }
 
-        if (node.isInTable() && node.isInPrefix()) {
-            Assert.assertNotEquals(node.getCounterValue(), ObservationTreeNode.OUTSIDE_COUNTER_LIMIT);
-            Assert.assertNotEquals(cvOutput.getOutput(), Output.UNKNOWN);
+        if (node.isInTable() && node.isInPrefix() && !node.isOnlyForLanguage()) {
+            Assert.assertNotEquals(node.getCounterValue(), UNKNOWN_COUNTER_VALUE);
         }
 
         if (node.isInPrefix()) {
-            if (cvOutput.getOutput() != Output.UNKNOWN) {
-                Assert.assertNotEquals(node.getClass(), ObservationTreeNode.UNKNOWN_COUNTER_VALUE);
-            }
-            Assert.assertNotEquals(node.getCounterValue(), ObservationTreeNode.OUTSIDE_COUNTER_LIMIT);
+            Assert.assertFalse(node.isOutsideCounterLimit());
         }
 
-        if (actualCvOutput.getOutput() != Output.UNKNOWN) {
-            if (actualCvOutput.getOutput() == Output.REJECTED) {
-                Assert.assertEquals(cvOutput.getOutput(), Output.REJECTED);
-            } else {
-                Assert.assertTrue(cvOutput.getOutput() == Output.REJECTED
-                        || cvOutput.getOutput() == Output.ACCEPTED);
-            }
-        }
-
-        if (node.getActualCounterValue() != ObservationTreeNode.UNKNOWN_COUNTER_VALUE) {
-            if (0 <= node.getActualCounterValue() && node.getActualCounterValue() <= counterLimit) {
-                Assert.assertEquals(node.getCounterValue(), node.getActualCounterValue());
-            } else {
-                Assert.assertEquals(node.getCounterValue(), ObservationTreeNode.OUTSIDE_COUNTER_LIMIT);
-            }
-        }
-
-        if (node.getCounterValue() == ObservationTreeNode.OUTSIDE_COUNTER_LIMIT) {
-            Assert.assertEquals(cvOutput.getOutput(), Output.REJECTED);
-        } else if (node.getCounterValue() > 0) {
-            Assert.assertEquals(cvOutput.getOutput(), Output.REJECTED);
-        }
-
-        if (node.isInTable()) {
-            Assert.assertNotEquals(cvOutput.getOutput(), Output.UNKNOWN);
+        if (node.getOutput() && !node.isOnlyForLanguage()) {
+            Assert.assertEquals(node.getCounterValue(), 0);
         }
 
         for (ObservationTreeNode<I> successor : node.getSuccessors()) {
@@ -147,21 +121,28 @@ public class LStarROCATest {
         }
     }
 
-    private static <I> void checkTable(ObservationTableWithCounterValuesROCA<I> table) {
-        PrefixTrie<I> prefixOfL = new PrefixTrie<>(table.getInputAlphabet());
+    private static <I> void checkPrefixTable(ObservationTableWithCounterValuesROCA<I> table) {
+        IncrementalPCDFATreeBuilder<I> prefixOfL = new IncrementalPCDFATreeBuilder<>(table.getInputAlphabet());
         for (Row<I> row : table.getAllRows()) {
+            List<PairCounterValueOutput<Boolean>> rowContents = table.fullWholeRowContents(row);
             for (int i = 0; i < table.numberOfSuffixes(); i++) {
-                if (table.fullCellContents(row, i).getOutput()) {
-                    prefixOfL.add(row.getLabel().concat(table.getSuffix(i)));
+                if (rowContents.get(i).getOutput()) {
+                    prefixOfL.insert(row.getLabel().concat(table.getSuffix(i)));
                 }
             }
         }
 
         for (Row<I> row : table.getAllRows()) {
+            List<PairCounterValueOutput<Boolean>> rowContents = table.fullWholeRowContents(row);
             for (int i = 0; i < table.numberOfSuffixes(); i++) {
-                // The cell has a -1 iff the word is not in the prefix of the language
-                Assert.assertEquals(table.fullCellContents(row, i).getCounterValue() != -1,
-                        prefixOfL.contains(row.getLabel().concat(table.getSuffix(i))));
+                if (!table.isSuffixOnlyForLanguage(i)) {
+                    // The cell has a -1 iff the word is not in the prefix of the language
+                    boolean isUnknown = rowContents.get(i).getCounterValue() == UNKNOWN_COUNTER_VALUE;
+                    Acceptance isInPrefix = prefixOfL.lookup(row.getLabel().concat(table.getSuffix(i)));
+                    boolean inPrefix = isInPrefix.equals(Acceptance.TRUE);
+
+                    Assert.assertNotEquals(inPrefix, isUnknown);
+                }
             }
         }
     }

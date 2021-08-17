@@ -11,7 +11,11 @@ import net.automatalib.automata.oca.ROCA;
 import net.automatalib.words.Alphabet;
 
 /**
- * An experiment for ROCAs.
+ * An experiment for learning ROCAs.
+ * 
+ * It is guaranteed that the counterexample picked among the counterexamples
+ * returned by the equivalence queries is an actual counterexample for the
+ * learner's known information.
  * 
  * @author Gaëtan Staquet
  */
@@ -63,9 +67,9 @@ public final class ROCAExperiment<I> extends AbstractExperiment<ROCA<?, I>> {
                         && learningAlgorithm.isCounterexample(ce.getInput(), ce.getOutput())) {
                     // Since we want the output of the counterexample to be true and to be an actual
                     // counterexample for the learner, we have to discard some counterexamples.
-                    // It may happen than a word is a counterexample for an ROCA but not for the
-                    // learner's knowledge as the ROCAs construction process does not necessarily
-                    // take into account the whole table.
+                    // Indeed, it may happen than a word is a counterexample for an ROCA but not for
+                    // the learner's knowledge as the ROCAs construction process does not
+                    // necessarily take into account the whole table.
                     counterexample = ce;
                 }
             }

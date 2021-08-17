@@ -13,6 +13,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import de.learnlib.api.oracle.MembershipOracle;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
+import static de.learnlib.algorithms.lstar.roca.ObservationTableWithCounterValuesROCA.UNKNOWN_COUNTER_VALUE;
 
 /**
  * A node in a prefix tree used by {@link ObservationTableWithCounterValuesROCA}
@@ -23,25 +24,19 @@ import net.automatalib.words.Word;
  * 
  * A node stores four elements:
  * <ul>
- * <li>The actual answers to the membership and counter value queries (i.e.,
- * whether the word belongs in L and the counter value associated to the word),
- * noted L(w) and C(w).</li>
- * <li>The output and counter value, up to the counter limit (i.e., whether the
- * word belongs in L_l and the counter value), noted L_l(w) and C_l(w). It may
- * happen than the L(w) = true but the L_l(w) = false because a prefix of the
- * word exceeds the counter limit. The values of C_l(w) can be internally in {0,
- * ..., l} U {OUTSIDE_COUNTER_LIMIT, UNKNOWN_COUNTER_VALUE} (with l the counter
- * limit). However, the values visible to the learner are in {0, ..., l} U
- * {UNKNOWN_COUNTER_VALUE}. That is, the value OUTSIDE_COUNTER_LIMIT is merged
- * into UNKNOWN_COUNTER_VALUE when the learner processes the table.</li>
+ * <li>The answers to the membership and counter value queries, noted L(w) and
+ * C(w).</li>
  * <li>Whether the word is in the prefix of the language L_l, noted P(w).</li>
  * <li>Whether the node is actually used in the table. Since the tree is closed
  * by prefix, there are nodes that are not actually used by the learner's
  * table.</li>
  * </ul>
  * 
- * Storing the actual answers to the queries allow us to reduce the number of
- * asked queries (since we do not have to ask multiple times the same queries).
+ * Note that the learner does not immediately access to the stored information.
+ * Instead, the returned values (for outputs and counter values) depend on
+ * whether the word is in the known prefix, and whether one of the ancestors of
+ * the node has a counter value exceeding the limit. We note these values L_l(w)
+ * and C_l(w).
  * 
  * Once an operation over the tree is finished, we have the following
  * invariants, with l the current counter limit:
@@ -72,17 +67,23 @@ class ObservationTreeNode<I> {
         ACCEPTED, REJECTED, UNKNOWN
     }
 
-    private static class TableCell<I> {
-        public final RowImpl<I> row;
-        public final int suffixIndex;
+    static class TableCell<I> {
+        private final RowImpl<I> row;
+        private final int suffixIndex;
+
         public TableCell(RowImpl<I> row, int suffixIndex) {
             this.row = row;
             this.suffixIndex = suffixIndex;
         }
-    }
 
-    final static int UNKNOWN_COUNTER_VALUE = -1;
-    final static int OUTSIDE_COUNTER_LIMIT = -2;
+        public RowImpl<I> getRow() {
+            return row;
+        }
+
+        public int getSuffixIndex() {
+            return suffixIndex;
+        }
+    }
 
     private final @Nullable ObservationTreeNode<I> parent;
     private final Map<Integer, ObservationTreeNode<I>> successors = new HashMap<>();
@@ -90,28 +91,36 @@ class ObservationTreeNode<I> {
     private final Alphabet<I> alphabet;
 
     private final Word<I> prefix;
-    private final PairCounterValueOutput<Output> actualCvOutput;
     private final PairCounterValueOutput<Output> cvOutput;
 
     private final List<TableCell<I>> tableCells = new ArrayList<>();
 
-    boolean inPrefix = false;
+    private boolean inPrefix = false;
+    private boolean isOutsideCounterLimit = false;
 
     ObservationTreeNode(Word<I> prefix, ObservationTreeNode<I> parent, Alphabet<I> alphabet) {
         this.parent = parent;
         this.alphabet = alphabet;
         this.prefix = prefix;
         this.cvOutput = new PairCounterValueOutput<>(Output.UNKNOWN, UNKNOWN_COUNTER_VALUE);
-        this.actualCvOutput = new PairCounterValueOutput<>(Output.UNKNOWN, UNKNOWN_COUNTER_VALUE);
+    }
 
-        if (parent != null && parent.getCounterValue() == OUTSIDE_COUNTER_LIMIT) {
-            markOutsideCounterLimit();
-        }
+    public void initializeAsRoot(MembershipOracle<I, Boolean> membershipOracle,
+            MembershipOracle.CounterValueOracle<I> counterValueOracle) {
+        assert prefix.equals(Word.epsilon());
+        boolean accepted = membershipOracle.answerQuery(Word.epsilon());
+        setOutput(accepted);
+        setOutsideCounterLimit(false);
+        // We cheat a little for the root and we assume it is always in the prefix of
+        // the language
+        setInPrefix(true);
+        // We assume that the counter value of the initial state is always zero
+        setCounterValue(0);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(inPrefix, cvOutput, prefix);
+        return Objects.hash(prefix);
     }
 
     @Override
@@ -127,8 +136,7 @@ class ObservationTreeNode<I> {
         }
 
         ObservationTreeNode<?> o = (ObservationTreeNode<?>) obj;
-        return o.inPrefix == this.inPrefix && Objects.equals(o.prefix, prefix)
-                && Objects.equals(o.cvOutput, this.cvOutput);
+        return Objects.equals(o.prefix, this.prefix) && Objects.equals(o.cvOutput, this.cvOutput);
     }
 
     private void setSuccessor(I symbol, ObservationTreeNode<I> successor) {
@@ -151,73 +159,82 @@ class ObservationTreeNode<I> {
         return parent;
     }
 
-    int getCounterValue() {
-        return cvOutput.getCounterValue();
-    }
-
-    int getSimplifiedCounterValue() {
-        int cv = getCounterValue();
-        if (cv == OUTSIDE_COUNTER_LIMIT) {
-            return UNKNOWN_COUNTER_VALUE;
-        } else {
-            return cv;
-        }
-    }
-
-    void setCounterValue(int counterValue) {
-        tableCells.stream().forEach(c -> c.row.setCounterValue(c.suffixIndex, counterValue == OUTSIDE_COUNTER_LIMIT ? UNKNOWN_COUNTER_VALUE : counterValue));
-        cvOutput.setCounterValue(counterValue);
-    }
-
-    int getActualCounterValue() {
-        return actualCvOutput.getCounterValue();
-    }
-
-    void setActualCounterValue(int counterValue) {
-        actualCvOutput.setCounterValue(counterValue);
-    }
-
     boolean getOutput() {
-        return cvOutput.getOutput() == Output.ACCEPTED;
-    }
-
-    boolean getActualOutput() {
-        return actualCvOutput.getOutput() == Output.ACCEPTED;
-    }
-
-    void setOutput(boolean output) {
-        cvOutput.setOutput(output ? Output.ACCEPTED : Output.REJECTED);
-        if (output) {
-            tableCells.stream().forEach(c -> c.row.setOutput(c.suffixIndex));
+        if (parent != null && parent.isOutsideCounterLimit()) {
+            assert isOutsideCounterLimit();
         }
+        if (isOutsideCounterLimit() || !isInPrefix()) {
+            return false;
+        }
+        if (getStoredOutput() == Output.ACCEPTED) {
+            // Being in the prefix and used for full information implies that the counter
+            // value must be zero
+            assert !(isInPrefix() && !isOnlyForLanguage()) || getCounterValue() == 0;
+        }
+        return getStoredOutput() == Output.ACCEPTED;
     }
 
-    void setActualOutput(boolean output) {
-        actualCvOutput.setOutput(output ? Output.ACCEPTED : Output.REJECTED);
+    int getCounterValue() {
+        if (isOutsideCounterLimit() || !isInPrefix() || isOnlyForLanguage()) {
+            return UNKNOWN_COUNTER_VALUE;
+        }
+        return getStoredCounterValue();
     }
 
-    PairCounterValueOutput<Output> getCvOutput() {
-        return cvOutput;
+    PairCounterValueOutput<Boolean> getCounterValueOutput() {
+        return new PairCounterValueOutput<>(getOutput(), getCounterValue());
     }
 
-    PairCounterValueOutput<Output> getActualCvOutput() {
-        return actualCvOutput;
+    private void setOutput(boolean output) {
+        assert prefix.equals(Word.epsilon()) || isInTable();
+        setOutput(output ? Output.ACCEPTED : Output.REJECTED);
+        tableCells.stream().forEach(c -> c.getRow().updateOutput());
+    }
+
+    private void setOutput(Output output) {
+        cvOutput.setOutput(output);
+    }
+
+    private Output getStoredOutput() {
+        return cvOutput.getOutput();
+    }
+
+    private void setCounterValue(int counterValue) {
+        cvOutput.setCounterValue(counterValue);
+        tableCells.stream().forEach(c -> c.getRow().updateCounterValue());
+    }
+
+    private int getStoredCounterValue() {
+        return cvOutput.getCounterValue();
     }
 
     boolean isInPrefix() {
         return inPrefix;
     }
 
+    private void setInPrefix(boolean inPrefix) {
+        this.inPrefix = inPrefix;
+    }
+
+    boolean isOutsideCounterLimit() {
+        return isOutsideCounterLimit;
+    }
+
+    private void setOutsideCounterLimit(boolean outsideCounterLimit) {
+        this.isOutsideCounterLimit = outsideCounterLimit;
+    }
+
     boolean isInTable() {
         return tableCells.size() != 0;
     }
 
-    PairCounterValueOutput<Boolean> getCounterValueOutput() {
-        return new PairCounterValueOutput<>(cvOutput.getOutput() == Output.ACCEPTED, cvOutput.getCounterValue());
-    }
-
-    PairCounterValueOutput<Boolean> getSimplifiedCounterValueOutput() {
-        return new PairCounterValueOutput<>(getOutput(), getSimplifiedCounterValue());
+    boolean isOnlyForLanguage() {
+        for (TableCell<I> cell : tableCells) {
+            if (!cell.getRow().getTable().isSuffixOnlyForLanguage(cell.getSuffixIndex())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -252,49 +269,86 @@ class ObservationTreeNode<I> {
         return prefix;
     }
 
+    /**
+     * Asks a counter value query to fill C(w).
+     * @param counterValueOracle The oracle
+     * @param counterLimit The counter value
+     * @return True iff the counter value is lower or equal to the limit
+     */
+    private boolean askCounterValueQuery(MembershipOracle.CounterValueOracle<I> counterValueOracle, int counterLimit) {
+        if (getStoredCounterValue() == UNKNOWN_COUNTER_VALUE) {
+            int counterValue = counterValueOracle.answerQuery(getPrefix());
+            setCounterValue(counterValue);
+            return counterValue <= counterLimit;
+        } else {
+            return getStoredCounterValue() <= counterLimit;
+        }
+    }
+
+    private void addToTableCells(RowImpl<I> row, int suffixIndex) {
+        for (TableCell<I> cell : tableCells) {
+            if (cell.getRow() == row && cell.getSuffixIndex() == suffixIndex) {
+                return;
+            }
+        }
+        tableCells.add(new TableCell<>(row, suffixIndex));
+    }
+
     ObservationTreeNode<I> addSuffixInTable(Word<I> suffix, int indexInSuffix,
-            MembershipOracle<I, Boolean> membershipOracle, MembershipOracle<I, Integer> counterValueOracle,
+            MembershipOracle<I, Boolean> membershipOracle, MembershipOracle.CounterValueOracle<I> counterValueOracle,
             int counterLimit, RowImpl<I> row, int suffixIndex) {
         if (indexInSuffix == suffix.length()) {
-            tableCells.add(new TableCell<>(row, suffixIndex));
+            if (!row.getTable().isSuffixOnlyForLanguage(suffixIndex) && isOnlyForLanguage()) {
+                if (getStoredOutput() != Output.UNKNOWN && isInPrefix()
+                        && getStoredCounterValue() == UNKNOWN_COUNTER_VALUE) {
+                    setCounterValue(counterValueOracle.answerQuery(prefix));
+                }
+            }
+            addToTableCells(row, suffixIndex);
             // We know that the current node was not just created (i.e., it was not added in
             // the tree thanks to the suffix)
             // Once we have read the whole suffix, we have three possibilities:
             // 1. The node is already used in the table (that is, the output is known).
-            // In that case, we have nothing to do.
-            if (cvOutput.getOutput() != Output.UNKNOWN) {
-                assert (!inPrefix || cvOutput.getCounterValue() != UNKNOWN_COUNTER_VALUE);
-                if (getOutput()) {
-                    row.setOutput(suffixIndex);
+            // The node may have been added only for language purpose. In that case, we have
+            // to ask a counter value query (if we are using the node for full information)
+            if (getStoredOutput() != Output.UNKNOWN) {
+                // Being in the prefix implies that we are outside the counter limit
+                assert (!isInPrefix() || !isOutsideCounterLimit()) : prefix;
+                if (!isOnlyForLanguage()) {
+                    if (isInPrefix() && getCounterValue() == UNKNOWN_COUNTER_VALUE) {
+                        askCounterValueQuery(counterValueOracle, counterLimit);
+                    }
+                    assert (!(isInPrefix() && !isOnlyForLanguage()) || getCounterValue() != UNKNOWN_COUNTER_VALUE);
                 }
-                row.setCounterValue(suffixIndex, getSimplifiedCounterValue());
                 return this;
             }
 
             // 2. It is the first time the table uses the node (that is, the output is not
             // known).
             // In that case, we ask a membership query. Two cases can arise.
-            if (cvOutput.getOutput() == Output.UNKNOWN) {
-                boolean actualOutput = membershipOracle.answerQuery(prefix);
-                setActualOutput(actualOutput);
+            if (getStoredOutput() == Output.UNKNOWN) {
+                boolean actualOutput;
+                // If we have already asked a counter value query (to check whether the counter
+                // exceeded the limit), we can deduce an easy case from it
+                if (getStoredCounterValue() > 0 && getStoredCounterValue() != UNKNOWN_COUNTER_VALUE) {
+                    setOutput(false);
+                    actualOutput = false;
+                } else {
+                    actualOutput = membershipOracle.answerQuery(prefix);
+                    setOutput(actualOutput);
+                }
 
                 // 2.1. The word is not in L. Therefore, it is not in L_l. If the word is in the
                 // known prefix, we ask a counter value.
                 if (!actualOutput) {
-                    setOutput(false);
-                    if (inPrefix && cvOutput.getCounterValue() == UNKNOWN_COUNTER_VALUE) {
+                    if (isInPrefix() && !isOnlyForLanguage()) {
+                        askCounterValueQuery(counterValueOracle, counterLimit);
                         // If a word is in the prefix for the counter limit l, then the actual counter
                         // limit can not exceed l
-                        int actualCounterValue = counterValueOracle.answerQuery(prefix);
-                        assert actualCounterValue <= counterLimit;
-                        setActualCounterValue(actualCounterValue);
-                        setCounterValue(actualCounterValue);
+                        assert getStoredCounterValue() <= counterLimit;
                         if (parent != null) {
-                            assert parent.getCounterValue() != OUTSIDE_COUNTER_LIMIT;
+                            assert !parent.isOutsideCounterLimit();
                         }
-                    }
-                    else {
-                        row.setCounterValue(suffixIndex, UNKNOWN_COUNTER_VALUE);
                     }
                 }
                 // 2.2. The word is in L.
@@ -304,31 +358,17 @@ class ObservationTreeNode<I> {
                     // 2.2.1. If the word is in the prefix of the language (then, the word is in
                     // L_l), it's easy.
                     // We just have to ask a counter value query.
-                    if (inPrefix) {
-                        setOutput(true);
-                        if (cvOutput.getCounterValue() == UNKNOWN_COUNTER_VALUE) {
-                            int actualCounterValue = counterValueOracle.answerQuery(prefix);
-                            assert actualCounterValue <= counterLimit;
-                            setActualCounterValue(actualCounterValue);
-                            setCounterValue(actualCounterValue);
-                            assert getCounterValue() == 0;
-                            if (parent != null) {
-                                assert parent.getCounterValue() != OUTSIDE_COUNTER_LIMIT;
-                            }
-                        }
-                        else {
-                            row.setCounterValue(suffixIndex, getCounterValue());
-                        }
+                    if (isInPrefix() && !isOnlyForLanguage()) {
+                        askCounterValueQuery(counterValueOracle, counterLimit);
                     }
                     // 2.2.2. If the word is not in the prefix of the language, then the counter
                     // value can not be OUTSIDE_COUNTER_LIMIT
                     // We try to ask as few counter value queries as needed, i.e., some of the nodes
                     // will not be changed.
                     else {
-                        assert getCounterValue() != OUTSIDE_COUNTER_LIMIT;
                         // 2.2.2.1. We do not yet known the counter value of the word. See the called
                         // function for the explanation.
-                        if (getCounterValue() == UNKNOWN_COUNTER_VALUE) {
+                        if (getStoredCounterValue() == UNKNOWN_COUNTER_VALUE) {
                             boolean outside_limit = determineIfAncestorExceedsCounterLimit(counterValueOracle,
                                     counterLimit);
 
@@ -337,24 +377,19 @@ class ObservationTreeNode<I> {
                                 // So, we know that the word is in L_l and we can ask a counter value query.
                                 // Moreover, we have to update the ancestors to reflect the newly found prefix
                                 // of the language.
-                                inPrefix = true;
+                                setInPrefix(true);
+                                setOutsideCounterLimit(false);
 
-                                setOutput(true);
-
-                                int actualCounterValue = counterValueOracle.answerQuery(prefix);
-                                assert actualCounterValue <= counterLimit;
-                                setActualCounterValue(actualCounterValue);
-                                setCounterValue(actualCounterValue);
-                                if (parent != null) {
-                                    assert parent.getCounterValue() != OUTSIDE_COUNTER_LIMIT;
+                                if (!isOnlyForLanguage()) {
+                                    setCounterValue(0);
+                                    assert !isOutsideCounterLimit();
                                 }
 
                                 if (parent != null) {
                                     parent.inPrefixUpdate(membershipOracle, counterValueOracle, counterLimit);
                                 }
-                            }
-                            else {
-                                row.setCounterValue(suffixIndex, UNKNOWN_COUNTER_VALUE);
+                            } else {
+                                markExceedingCounterLimit();
                             }
                         }
                         // 2.2.2.2. The counter value is already known and is zero.
@@ -362,14 +397,11 @@ class ObservationTreeNode<I> {
                         // ancestor exceeds the counter limit)
                         else if (getCounterValue() == 0) {
                             setOutput(true);
-                            row.setCounterValue(suffixIndex, 0);
-                            inPrefix = true;
+                            setInPrefix(true);
+                            setOutsideCounterLimit(false);
                             if (parent != null) {
                                 parent.inPrefixUpdate(membershipOracle, counterValueOracle, counterLimit);
                             }
-                        } else {
-                            setOutput(false);
-                            row.setCounterValue(suffixIndex, UNKNOWN_COUNTER_VALUE);
                         }
                     }
                 }
@@ -383,6 +415,12 @@ class ObservationTreeNode<I> {
             if (successor == null) {
                 successor = new ObservationTreeNode<>(prefix.append(symbol), this, alphabet);
                 setSuccessor(symbol, successor);
+                // If we already know that the current node is outside of the counter limit (due
+                // to an ancestor's counter value), we want that information to be also present
+                // in the successors
+                if (isOutsideCounterLimit()) {
+                    successor.setOutsideCounterLimit(true);
+                }
                 return successor.addSuffixInTableNewInTree(suffix, indexInSuffix + 1, membershipOracle,
                         counterValueOracle, counterLimit, row, suffixIndex);
             } else {
@@ -393,10 +431,10 @@ class ObservationTreeNode<I> {
     }
 
     private ObservationTreeNode<I> addSuffixInTableNewInTree(Word<I> suffix, int indexInSuffix,
-            MembershipOracle<I, Boolean> membershipOracle, MembershipOracle<I, Integer> counterValueOracle,
+            MembershipOracle<I, Boolean> membershipOracle, MembershipOracle.CounterValueOracle<I> counterValueOracle,
             int counterLimit, RowImpl<I> row, int suffixIndex) {
         if (indexInSuffix == suffix.length()) {
-            tableCells.add(new TableCell<>(row, suffixIndex));
+            addToTableCells(row, suffixIndex);
             // We know that the current node has just been added in the tree.
             // So, we ask a membership query. If the answer is negative, we have nothing to
             // do (the node and the newly added ancestors are not in the prefix of the
@@ -406,7 +444,7 @@ class ObservationTreeNode<I> {
             // limit.
             // This is the similar to case 2.2.2.1. of the main function.
             boolean actualOutput = membershipOracle.answerQuery(prefix);
-            setActualOutput(actualOutput);
+            setOutput(actualOutput);
 
             if (actualOutput) {
                 boolean outside_limit = determineIfAncestorExceedsCounterLimit(counterValueOracle, counterLimit);
@@ -416,31 +454,20 @@ class ObservationTreeNode<I> {
                     // So, we know that the word is in L_l and we can ask a counter value query.
                     // Moreover, we have to update the ancestors to reflect the newly found prefix
                     // of the language.
-                    inPrefix = true;
+                    setInPrefix(true);
 
-                    setOutput(true);
-                    int actualCounterValue = counterValueOracle.answerQuery(prefix);
-                    setActualCounterValue(actualCounterValue);
-                    setCounterValue(actualCounterValue);
+                    if (!isOnlyForLanguage()) {
+                        setCounterValue(0);
+                    }
 
                     if (parent != null) {
                         parent.inPrefixUpdate(membershipOracle, counterValueOracle, counterLimit);
                     }
+                } else {
+                    markExceedingCounterLimit();
                 }
-                else {
-                    row.setCounterValue(suffixIndex, UNKNOWN_COUNTER_VALUE);
-                }
-            } else {
-                setOutput(false);
-                if (inPrefix) {
-                    int actualCounterValue = counterValueOracle.answerQuery(prefix);
-                    assert actualCounterValue <= counterLimit;
-                    setActualCounterValue(actualCounterValue);
-                    setCounterValue(actualCounterValue);
-                }
-                else {
-                    row.setCounterValue(suffixIndex, UNKNOWN_COUNTER_VALUE);
-                }
+            } else if (isInPrefix() && isOnlyForLanguage()) {
+                askCounterValueQuery(counterValueOracle, counterLimit);
             }
 
             return this;
@@ -448,13 +475,16 @@ class ObservationTreeNode<I> {
             I symbol = suffix.getSymbol(indexInSuffix);
             ObservationTreeNode<I> successor = new ObservationTreeNode<>(prefix.append(symbol), this, alphabet);
             setSuccessor(symbol, successor);
+            if (isOutsideCounterLimit()) {
+                successor.setOutsideCounterLimit(true);
+            }
             return successor.addSuffixInTableNewInTree(suffix, indexInSuffix + 1, membershipOracle, counterValueOracle,
                     counterLimit, row, suffixIndex);
         }
     }
 
     private List<ObservationTreeNode<I>> getAncestorsStartingFromLastKnownCounterValue() {
-        if (getActualCounterValue() != UNKNOWN_COUNTER_VALUE) {
+        if (getStoredCounterValue() != UNKNOWN_COUNTER_VALUE) {
             List<ObservationTreeNode<I>> l = new ArrayList<>();
             l.add(this);
             return l;
@@ -476,9 +506,9 @@ class ObservationTreeNode<I> {
      * @param counterLimit       The counter limit
      * @return True iff one of the ancestor exceeds the counter limit
      */
-    private boolean determineIfAncestorExceedsCounterLimit(MembershipOracle<I, Integer> counterValueOracle,
+    private boolean determineIfAncestorExceedsCounterLimit(MembershipOracle.CounterValueOracle<I> counterValueOracle,
             int counterLimit) {
-        if (parent != null && parent.getCounterValue() == OUTSIDE_COUNTER_LIMIT) {
+        if (parent != null && parent.isOutsideCounterLimit()) {
             return true;
         }
         // We do not yet known the counter value of the word. Let's call the current
@@ -499,55 +529,42 @@ class ObservationTreeNode<I> {
         List<ObservationTreeNode<I>> ancestors = getAncestorsStartingFromLastKnownCounterValue();
         int currentAncestorId = 0;
         while (currentAncestorId < ancestors.size()) {
-            int counterValueAncestor = ancestors.get(currentAncestorId).getActualCounterValue();
+            ObservationTreeNode<I> ancestor = ancestors.get(currentAncestorId);
             // The first ancestor must have a known counter value
-            assert counterValueAncestor != UNKNOWN_COUNTER_VALUE;
+            assert ancestor.getStoredCounterValue() != UNKNOWN_COUNTER_VALUE;
 
             // z' exceeds the counter limit. So, we already have a witness
-            if (counterValueAncestor == OUTSIDE_COUNTER_LIMIT) {
+            if (ancestor != this && ancestor.isOutsideCounterLimit()) {
                 if (currentAncestorId + 1 < ancestors.size()) {
-                    ancestors.get(currentAncestorId + 1).markOutsideCounterLimit();
+                    ancestors.get(currentAncestorId + 1).markExceedingCounterLimit();
                 }
                 return true;
             }
 
-            int firstPotentialOutsideCVAncestorIndex = (counterLimit + 1) - counterValueAncestor + currentAncestorId;
+            int firstPotentialOutsideCVAncestorIndex = (counterLimit + 1) - ancestor.getStoredCounterValue()
+                    + currentAncestorId;
             // If the first potential ancestor exceeding the counter limit is actually a
             // descendant of z, we know that the counter limit can not be exceeded.
             if (firstPotentialOutsideCVAncestorIndex >= ancestors.size()) {
                 return false;
             }
             ObservationTreeNode<I> potentialOutsideCVAncestor = ancestors.get(firstPotentialOutsideCVAncestorIndex);
-            assert potentialOutsideCVAncestor.getActualCounterValue() == UNKNOWN_COUNTER_VALUE;
+            assert potentialOutsideCVAncestor.getStoredCounterValue() == UNKNOWN_COUNTER_VALUE;
 
-            int actualCounterValueAncestor = counterValueOracle.answerQuery(potentialOutsideCVAncestor.getPrefix());
-            potentialOutsideCVAncestor.setActualCounterValue(actualCounterValueAncestor);
+            boolean insideCounterLimit = potentialOutsideCVAncestor.askCounterValueQuery(counterValueOracle,
+                    counterLimit);
 
-            if (actualCounterValueAncestor > counterLimit) {
-                potentialOutsideCVAncestor.markOutsideCounterLimit();
+            if (!insideCounterLimit) {
+                potentialOutsideCVAncestor.markExceedingCounterLimit();
                 return true;
             } else {
                 currentAncestorId = firstPotentialOutsideCVAncestorIndex;
-                if (isInPrefix()) {
-                    potentialOutsideCVAncestor.setCounterValue(actualCounterValueAncestor);
-                }
-                if (actualCounterValueAncestor > 0) {
+                if (potentialOutsideCVAncestor.getStoredCounterValue() > 0 && potentialOutsideCVAncestor.isInTable()) {
                     potentialOutsideCVAncestor.setOutput(false);
                 }
             }
         }
         return false;
-    }
-
-    private void markOutsideCounterLimit() {
-        if (getCounterValue() == OUTSIDE_COUNTER_LIMIT) {
-            return;
-        }
-        setCounterValue(OUTSIDE_COUNTER_LIMIT);
-        setOutput(false);
-        for (ObservationTreeNode<I> successor : successors.values()) {
-            successor.markOutsideCounterLimit();
-        }
     }
 
     ObservationTreeNode<I> getSuffix(Word<I> suffix, int indexInSuffix) {
@@ -562,72 +579,85 @@ class ObservationTreeNode<I> {
         return successor.getSuffix(suffix, indexInSuffix + 1);
     }
 
+    void oneCellNowUsesNodeForCounterValue(MembershipOracle.CounterValueOracle<I> counterValueOracle,
+            int counterLimit) {
+        // Determining whether the node actually belongs to the language is done at the
+        // node's creation (i.e., we already know if one of the ancestors exceed the
+        // counter limit)
+        // So, we just need to ask a new counter value query
+        if (isInPrefix()) {
+            askCounterValueQuery(counterValueOracle, counterLimit);
+        }
+    }
+
     void increaseCounterLimit(MembershipOracle<I, Boolean> membershipOracle,
-            MembershipOracle<I, Integer> counterValueOracle, int counterLimit) {
-        if (getCounterValue() == OUTSIDE_COUNTER_LIMIT && getActualCounterValue() <= counterLimit) {
-            if (actualCvOutput.getOutput() == Output.UNKNOWN) {
-                boolean output = membershipOracle.answerQuery(prefix);
-                setActualOutput(output);
+            MembershipOracle.CounterValueOracle<I> counterValueOracle, int counterLimit) {
+        // To increase the counter limit in the tree, we have to go down to the nodes
+        // that are ACCEPTED.
+        // For each seen node, we remove the flag "outside counter limit".
+        // If during the descent, we reach a state for which the counter value is known
+        // and that is such that the counter value exceeds the limit, we already know
+        // that the subtree must be marked as outside the counter limit.
+
+        // Invariant: the parent's counter value does not exceed the counter limit (or
+        // if it does, we do not yet have a witness)
+        assert parent == null || !parent.isOutsideCounterLimit();
+        if (getCounterValue() == UNKNOWN_COUNTER_VALUE) {
+            if (getStoredOutput() == Output.UNKNOWN && isInTable()) {
+                setOutput(membershipOracle.answerQuery(prefix));
             }
-
-            if (!determineIfAncestorExceedsCounterLimit(counterValueOracle, counterLimit)) {
-                setOutput(getActualOutput());
-
-                if (getOutput()) {
-                    inPrefix = true;
-
-                    if (getActualCounterValue() != UNKNOWN_COUNTER_VALUE) {
-                        setCounterValue(getActualCounterValue());
+            if (getStoredOutput() == Output.ACCEPTED) {
+                // We verify if the counter value of one of the ancestors exceeds the limit
+                if (!determineIfAncestorExceedsCounterLimit(counterValueOracle, counterLimit)) {
+                    setInPrefix(true);
+                    setOutsideCounterLimit(false);
+                    if (!isOnlyForLanguage()) {
+                        setCounterValue(0);
                     }
-                    else {
-                        int counterValue = counterValueOracle.answerQuery(prefix);
-                        assert counterValue <= counterLimit;
-                        setCounterValue(counterValue);
-                        setActualCounterValue(counterValue);
-                        if (parent != null) {
-                            assert parent.getCounterValue() != OUTSIDE_COUNTER_LIMIT;
-                        }
-                    }
-
                     if (parent != null) {
                         parent.inPrefixUpdate(membershipOracle, counterValueOracle, counterLimit);
                     }
                 }
-                else if (isInPrefix() && getActualCounterValue() != UNKNOWN_COUNTER_VALUE) {
-                    setCounterValue(getActualCounterValue());
-                }
-                else if (getCounterValue() == OUTSIDE_COUNTER_LIMIT) {
-                    setCounterValue(UNKNOWN_COUNTER_VALUE);
-                }
+            }
+
+            if (getStoredCounterValue() > counterLimit) {
+                markExceedingCounterLimit();
+            } else {
+                setOutsideCounterLimit(false);
             }
         }
 
-        if (getActualCounterValue() <= counterLimit) {
+        if (!isOutsideCounterLimit()) {
             for (ObservationTreeNode<I> successor : successors.values()) {
-                successor.increaseCounterLimit(membershipOracle, counterValueOracle, counterLimit);
+                if (!isOutsideCounterLimit()) {
+                    successor.increaseCounterLimit(membershipOracle, counterValueOracle, counterLimit);
+                }
             }
         }
     }
 
     private void inPrefixUpdate(MembershipOracle<I, Boolean> membershipOracle,
-            MembershipOracle<I, Integer> counterValueOracle, int counterLimit) {
+            MembershipOracle.CounterValueOracle<I> counterValueOracle, int counterLimit) {
         // If we already know the node is in the prefix of the language, we do not need
         // to keep climbing up
-        if (inPrefix) {
+        if (isInPrefix()) {
             return;
         }
-        inPrefix = true;
+        setInPrefix(true);
 
-        if (getCounterValue() == UNKNOWN_COUNTER_VALUE) {
-            boolean output = membershipOracle.answerQuery(prefix);
-            setActualOutput(output);
-            setOutput(output);
-            int counterValue = counterValueOracle.answerQuery(prefix);
-            assert counterValue <= counterLimit;
-            setActualCounterValue(counterValue);
-            setCounterValue(counterValue);
-            if (parent != null) {
-                assert parent.getCounterValue() != OUTSIDE_COUNTER_LIMIT;
+        if (isInTable()) {
+            if (getStoredOutput() == Output.UNKNOWN) {
+                boolean output = membershipOracle.answerQuery(prefix);
+                setOutput(output);
+            }
+            if (getStoredOutput() == Output.ACCEPTED) {
+                setCounterValue(0);
+            }
+            if (getStoredCounterValue() == UNKNOWN_COUNTER_VALUE && !isOnlyForLanguage()) {
+                boolean insideCounterLimit = askCounterValueQuery(counterValueOracle, counterLimit);
+                if (!insideCounterLimit) {
+                    markExceedingCounterLimit();
+                }
             }
         }
 
@@ -637,6 +667,20 @@ class ObservationTreeNode<I> {
         }
     }
 
+    private void markExceedingCounterLimit() {
+        if (isOutsideCounterLimit()) {
+            return;
+        }
+        setOutsideCounterLimit(true);
+        for (ObservationTreeNode<I> child : successors.values()) {
+            child.markExceedingCounterLimit();
+        }
+    }
+
+    List<TableCell<I>> getCellsInTableUsingNode() {
+        return tableCells;
+    }
+
     /**
      * Creates a pretty display of the tree.
      * 
@@ -644,7 +688,7 @@ class ObservationTreeNode<I> {
      */
     public String toStringRepresentation() {
         StringBuilder builder = new StringBuilder();
-        print(builder, "", "");
+        createRepresentation(builder, "", "");
         return builder.toString();
     }
 
@@ -653,17 +697,17 @@ class ObservationTreeNode<I> {
         return toStringRepresentation();
     }
 
-    private void print(StringBuilder buffer, String prefix, String childrenPrefix) {
+    private void createRepresentation(StringBuilder buffer, String prefix, String childrenPrefix) {
         buffer.append(prefix);
-        buffer.append(this.prefix + " " + this.cvOutput + " " + this.actualCvOutput + " " + this.inPrefix + " "
-                + isInTable());
+        buffer.append(this.prefix + " " + this.cvOutput + " " + isInPrefix() + " " + isInTable() + " "
+                + isOutsideCounterLimit() + " " + isOnlyForLanguage());
         buffer.append('\n');
         for (Iterator<ObservationTreeNode<I>> it = successors.values().iterator(); it.hasNext();) {
             ObservationTreeNode<I> next = it.next();
             if (it.hasNext()) {
-                next.print(buffer, childrenPrefix + "├── ", childrenPrefix + "│   ");
+                next.createRepresentation(buffer, childrenPrefix + "├── ", childrenPrefix + "│   ");
             } else {
-                next.print(buffer, childrenPrefix + "└── ", childrenPrefix + "    ");
+                next.createRepresentation(buffer, childrenPrefix + "└── ", childrenPrefix + "    ");
             }
         }
     }
