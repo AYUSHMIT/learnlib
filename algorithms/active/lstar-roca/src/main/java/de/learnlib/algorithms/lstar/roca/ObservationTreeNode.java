@@ -255,14 +255,29 @@ class ObservationTreeNode<I> {
             return this;
         } else {
             I symbol = prefix.getSymbol(indexInPrefix);
-            ObservationTreeNode<I> successor = getSuccessor(symbol);
-            if (successor == null) {
-                successor = new ObservationTreeNode<>(prefix.subWord(0, indexInPrefix + 1), this, alphabet);
-                setSuccessor(symbol, successor);
-            }
-
+            ObservationTreeNode<I> successor = getOrCreateSuccessor(symbol);
             return successor.getPrefix(prefix, indexInPrefix + 1);
         }
+    }
+
+    private ObservationTreeNode<I> getOrCreateSuccessor(I symbol) {
+        ObservationTreeNode<I> successor = getSuccessor(symbol);
+        if (successor == null) {
+            return createSuccessor(symbol);
+        }
+        return successor;
+    }
+
+    private ObservationTreeNode<I> createSuccessor(I symbol) {
+        ObservationTreeNode<I> successor = new ObservationTreeNode<>(prefix.append(symbol), this, alphabet);
+        setSuccessor(symbol, successor);
+        // If we already know that the current node is outside of the counter limit (due
+        // to an ancestor's counter value), we want that information to be also present
+        // in the successors
+        if (isOutsideCounterLimit()) {
+            successor.setOutsideCounterLimit(true);
+        }
+        return successor;
     }
 
     Word<I> getPrefix() {
@@ -413,14 +428,7 @@ class ObservationTreeNode<I> {
             I symbol = suffix.getSymbol(indexInSuffix);
             ObservationTreeNode<I> successor = getSuccessor(symbol);
             if (successor == null) {
-                successor = new ObservationTreeNode<>(prefix.append(symbol), this, alphabet);
-                setSuccessor(symbol, successor);
-                // If we already know that the current node is outside of the counter limit (due
-                // to an ancestor's counter value), we want that information to be also present
-                // in the successors
-                if (isOutsideCounterLimit()) {
-                    successor.setOutsideCounterLimit(true);
-                }
+                successor = createSuccessor(symbol);
                 return successor.addSuffixInTableNewInTree(suffix, indexInSuffix + 1, membershipOracle,
                         counterValueOracle, counterLimit, row, suffixIndex);
             } else {
@@ -473,11 +481,7 @@ class ObservationTreeNode<I> {
             return this;
         } else {
             I symbol = suffix.getSymbol(indexInSuffix);
-            ObservationTreeNode<I> successor = new ObservationTreeNode<>(prefix.append(symbol), this, alphabet);
-            setSuccessor(symbol, successor);
-            if (isOutsideCounterLimit()) {
-                successor.setOutsideCounterLimit(true);
-            }
+            ObservationTreeNode<I> successor = createSuccessor(symbol);
             return successor.addSuffixInTableNewInTree(suffix, indexInSuffix + 1, membershipOracle, counterValueOracle,
                     counterLimit, row, suffixIndex);
         }
@@ -622,7 +626,7 @@ class ObservationTreeNode<I> {
 
             if (getStoredCounterValue() > counterLimit) {
                 markExceedingCounterLimit();
-            } else {
+            } else if (!parent.isOutsideCounterLimit()) {
                 setOutsideCounterLimit(false);
             }
         }
