@@ -28,6 +28,9 @@ class RowImpl<I> implements Row<I> {
 
     private final ObservationTableWithCounterValuesROCA<I> table;
 
+    private List<Boolean> outputs;
+    private List<PairCounterValueOutput<Boolean>> cvOutputs;
+
     RowImpl(int rowId, ObservationTreeNode<I> node, ObservationTableWithCounterValuesROCA<I> table) {
         this.rowId = rowId;
         this.node = node;
@@ -111,15 +114,17 @@ class RowImpl<I> implements Row<I> {
     }
 
     List<PairCounterValueOutput<Boolean>> getRowContents() {
-        List<PairCounterValueOutput<Boolean>> cvOutputs = new ArrayList<>(nodes.size());
-        for (int i = 0; i < numberOfSuffixes(); i++) {
-            ObservationTreeNode<I> node = nodes.get(i);
-            if (!table.isSuffixOnlyForLanguage(i)) {
-                PairCounterValueOutput<Boolean> cvOutput = node.getCounterValueOutput();
-                cvOutputs.add(cvOutput);
+        if (cvOutputs == null || cvOutputs.size() != table.numberOfClassicalSuffixes()) {
+            List<PairCounterValueOutput<Boolean>> newCvOutputs = new ArrayList<>(nodes.size());
+            for (int i = 0; i < numberOfSuffixes(); i++) {
+                ObservationTreeNode<I> node = nodes.get(i);
+                if (!table.isSuffixOnlyForLanguage(i)) {
+                    PairCounterValueOutput<Boolean> cvOutput = node.getCounterValueOutput();
+                    newCvOutputs.add(cvOutput);
+                }
             }
+            cvOutputs = newCvOutputs;
         }
-
         return cvOutputs;
     }
 
@@ -137,12 +142,15 @@ class RowImpl<I> implements Row<I> {
     }
 
     List<Boolean> getOutputs() {
-        List<Boolean> outputs = new ArrayList<>();
-        for (int i = 0; i < numberOfSuffixes(); i++) {
-            ObservationTreeNode<I> node = nodes.get(i);
-            if (!table.isSuffixOnlyForLanguage(i)) {
-                outputs.add(node.getOutput());
+        if (outputs == null || outputs.size() != table.numberOfClassicalSuffixes()) {
+            List<Boolean> newOutputs = new ArrayList<>();
+            for (int i = 0; i < numberOfSuffixes(); i++) {
+                ObservationTreeNode<I> node = nodes.get(i);
+                if (!table.isSuffixOnlyForLanguage(i)) {
+                    newOutputs.add(node.getOutput());
+                }
             }
+            outputs = newOutputs;
         }
         return outputs;
     }
@@ -169,6 +177,8 @@ class RowImpl<I> implements Row<I> {
      * its output
      */
     void outputChange() {
+        this.outputs = null;
+        this.cvOutputs = null;
         table.outputsOfRowChanged(this);
     }
 
@@ -177,6 +187,7 @@ class RowImpl<I> implements Row<I> {
      * its counter value
      */
     void counterValueChange() {
+        this.cvOutputs = null;
         table.changedCounterValue(this);
     }
 

@@ -237,6 +237,34 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         return Collections.unmodifiableList(suffixes);
     }
 
+    @Override
+    public int numberOfRows() {
+        return allRows.size();
+    }
+
+    @Override
+    public int numberOfShortPrefixRows() {
+        return shortPrefixRows.size();
+    }
+
+    @Override
+    public int numberOfLongPrefixRows() {
+        return longPrefixRows.size();
+    }
+
+    @Override
+    public int numberOfSuffixes() {
+        return suffixes.size();
+    }
+
+    public int numberOfForLanguageOnlySuffixes() {
+        return suffixIsOnlyForLanguage.cardinality();
+    }
+
+    public int numberOfClassicalSuffixes() {
+        return numberOfSuffixes() - numberOfForLanguageOnlySuffixes();
+    }
+
     public int getCounterLimit() {
         return counterLimit;
     }
