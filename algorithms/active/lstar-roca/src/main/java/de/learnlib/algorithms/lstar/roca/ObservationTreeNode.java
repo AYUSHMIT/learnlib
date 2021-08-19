@@ -160,6 +160,8 @@ class ObservationTreeNode<I> {
     }
 
     boolean getOutput() {
+        // isInPrefix() => !isOutsideCounterLimit()
+        assert !isInPrefix() || !isOutsideCounterLimit();
         if (parent != null && parent.isOutsideCounterLimit()) {
             assert isOutsideCounterLimit();
         }
@@ -187,12 +189,7 @@ class ObservationTreeNode<I> {
 
     private void setOutput(boolean output) {
         assert prefix.equals(Word.epsilon()) || isInTable();
-        setOutput(output ? Output.ACCEPTED : Output.REJECTED);
-        tableCells.stream().forEach(c -> c.getRow().updateOutput());
-    }
-
-    private void setOutput(Output output) {
-        cvOutput.setOutput(output);
+        cvOutput.setOutput(output ? Output.ACCEPTED : Output.REJECTED);
     }
 
     private Output getStoredOutput() {
@@ -201,7 +198,6 @@ class ObservationTreeNode<I> {
 
     private void setCounterValue(int counterValue) {
         cvOutput.setCounterValue(counterValue);
-        tableCells.stream().forEach(c -> c.getRow().updateCounterValue());
     }
 
     private int getStoredCounterValue() {
@@ -286,12 +282,17 @@ class ObservationTreeNode<I> {
 
     /**
      * Asks a counter value query to fill C(w).
+     * 
      * @param counterValueOracle The oracle
-     * @param counterLimit The counter value
+     * @param counterLimit       The counter value
      * @return True iff the counter value is lower or equal to the limit
      */
     private boolean askCounterValueQuery(MembershipOracle.CounterValueOracle<I> counterValueOracle, int counterLimit) {
         if (getStoredCounterValue() == UNKNOWN_COUNTER_VALUE) {
+            if (getStoredOutput() == Output.ACCEPTED) {
+                setCounterValue(0);
+                return true;
+            }
             int counterValue = counterValueOracle.answerQuery(getPrefix());
             setCounterValue(counterValue);
             return counterValue <= counterLimit;
@@ -320,6 +321,7 @@ class ObservationTreeNode<I> {
                 }
             }
             addToTableCells(row, suffixIndex);
+            int previousCV = getCounterValue();
             // We know that the current node was not just created (i.e., it was not added in
             // the tree thanks to the suffix)
             // Once we have read the whole suffix, we have three possibilities:
@@ -334,6 +336,12 @@ class ObservationTreeNode<I> {
                         askCounterValueQuery(counterValueOracle, counterLimit);
                     }
                     assert (!(isInPrefix() && !isOnlyForLanguage()) || getCounterValue() != UNKNOWN_COUNTER_VALUE);
+                }
+                row.outputChange();
+                if (previousCV != getCounterValue()) {
+                    notifyCounterValueChange();
+                } else if (getCounterValue() != UNKNOWN_COUNTER_VALUE) {
+                    row.counterValueChange();
                 }
                 return this;
             }
@@ -422,6 +430,12 @@ class ObservationTreeNode<I> {
                 }
             }
 
+            row.outputChange();
+            if (previousCV != getCounterValue()) {
+                notifyCounterValueChange();
+            } else if (getCounterValue() != UNKNOWN_COUNTER_VALUE) {
+                row.counterValueChange();
+            }
             return this;
         } else {
             // If we have not yet read everything, we keep going down the tree
@@ -463,6 +477,7 @@ class ObservationTreeNode<I> {
                     // Moreover, we have to update the ancestors to reflect the newly found prefix
                     // of the language.
                     setInPrefix(true);
+                    setOutsideCounterLimit(false);
 
                     if (!isOnlyForLanguage()) {
                         setCounterValue(0);
@@ -478,6 +493,11 @@ class ObservationTreeNode<I> {
                 askCounterValueQuery(counterValueOracle, counterLimit);
             }
 
+            // We know that there is only row using this node
+            row.outputChange();
+            if (getCounterValue() != UNKNOWN_COUNTER_VALUE) {
+                row.counterValueChange();
+            }
             return this;
         } else {
             I symbol = suffix.getSymbol(indexInSuffix);
@@ -563,24 +583,13 @@ class ObservationTreeNode<I> {
                 return true;
             } else {
                 currentAncestorId = firstPotentialOutsideCVAncestorIndex;
+                potentialOutsideCVAncestor.notifyCounterValueChange();
                 if (potentialOutsideCVAncestor.getStoredCounterValue() > 0 && potentialOutsideCVAncestor.isInTable()) {
                     potentialOutsideCVAncestor.setOutput(false);
                 }
             }
         }
         return false;
-    }
-
-    ObservationTreeNode<I> getSuffix(Word<I> suffix, int indexInSuffix) {
-        if (indexInSuffix == suffix.length()) {
-            return this;
-        }
-        I symbol = suffix.getSymbol(indexInSuffix);
-        ObservationTreeNode<I> successor = getSuccessor(symbol);
-        if (successor == null) {
-            return null;
-        }
-        return successor.getSuffix(suffix, indexInSuffix + 1);
     }
 
     void oneCellNowUsesNodeForCounterValue(MembershipOracle.CounterValueOracle<I> counterValueOracle,
@@ -590,7 +599,15 @@ class ObservationTreeNode<I> {
         // counter limit)
         // So, we just need to ask a new counter value query
         if (isInPrefix()) {
-            askCounterValueQuery(counterValueOracle, counterLimit);
+            int previousCV = getCounterValue();
+            if (getStoredOutput() == Output.ACCEPTED) {
+                setCounterValue(0);
+            } else {
+                askCounterValueQuery(counterValueOracle, counterLimit);
+            }
+            if (previousCV != getCounterValue()) {
+                notifyCounterValueChange();
+            }
         }
     }
 
@@ -618,9 +635,13 @@ class ObservationTreeNode<I> {
                     if (!isOnlyForLanguage()) {
                         setCounterValue(0);
                     }
+                    notifyOutputChange();
                     if (parent != null) {
                         parent.inPrefixUpdate(membershipOracle, counterValueOracle, counterLimit);
                     }
+                } else {
+                    setInPrefix(false);
+                    markExceedingCounterLimit();
                 }
             }
 
@@ -628,6 +649,7 @@ class ObservationTreeNode<I> {
                 markExceedingCounterLimit();
             } else if (!parent.isOutsideCounterLimit()) {
                 setOutsideCounterLimit(false);
+                notifyCounterValueChange();
             }
         }
 
@@ -656,11 +678,15 @@ class ObservationTreeNode<I> {
             }
             if (getStoredOutput() == Output.ACCEPTED) {
                 setCounterValue(0);
+                notifyOutputChange();
+                notifyCounterValueChange();
             }
             if (getStoredCounterValue() == UNKNOWN_COUNTER_VALUE && !isOnlyForLanguage()) {
                 boolean insideCounterLimit = askCounterValueQuery(counterValueOracle, counterLimit);
                 if (!insideCounterLimit) {
                     markExceedingCounterLimit();
+                } else {
+                    notifyCounterValueChange();
                 }
             }
         }
@@ -683,6 +709,14 @@ class ObservationTreeNode<I> {
 
     List<TableCell<I>> getCellsInTableUsingNode() {
         return tableCells;
+    }
+
+    private void notifyOutputChange() {
+        tableCells.stream().forEach(c -> c.getRow().outputChange());
+    }
+
+    private void notifyCounterValueChange() {
+        tableCells.stream().forEach(c -> c.getRow().counterValueChange());
     }
 
     /**

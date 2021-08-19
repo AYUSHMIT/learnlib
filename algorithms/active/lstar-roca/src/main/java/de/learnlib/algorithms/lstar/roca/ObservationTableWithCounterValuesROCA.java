@@ -39,14 +39,18 @@ import net.automatalib.words.impl.Alphabets;
  * of the language, i.e., in the set of prefixes of the words that are known to
  * be accepted.
  * 
- * The table maintains three sets: - A set of prefixes (the rows of the table);
- * - Two sets of suffixes (the columns). The first is simply called the set of
+ * The table maintains three sets:
+ * <ul>
+ * <li>A set of prefixes (the rows of the table);</li>
+ * <li>Two sets of suffixes (the columns). The first is simply called the set of
  * suffixes (noted S), while the second is called the set of "only for language
- * suffixes". The idea is that the counter values of the "only for language"
- * columns are not needed. That is, the "only for language" columns are present
- * only to have witnesses that a given word is in the known prefix of the
- * language. It is guaranteed that the set of suffixes is included in the set of
- * "only for language" suffixes.
+ * suffixes".</li>
+ * 
+ * The idea is that the counter values of the "only for language" columns are
+ * not needed. That is, the "only for language" columns are present only to have
+ * witnesses that a given word is in the known prefix of the language. It is
+ * guaranteed that the set of suffixes is included in the set of "only for
+ * language" suffixes.
  * 
  * The learnt knowledge is actually stored in a prefix tree. The cells in the
  * table are references to nodes in the tree. This implies the learner stores
@@ -577,10 +581,13 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         this.suffixIsOnlyForLanguage.set(numberOfSuffixes(), numberOfSuffixes() + newSuffixList.size(), false);
         this.suffixes.addAll(newSuffixList);
 
-        for (RowImpl<I> row : allRows) {
-            // For the suffixes that were already known but were used only for language, we
-            // have to update the tree to retrieve the counter values
-            if (!existingSuffixesIndices.isEmpty()) {
+        // For the suffixes that were already known but were used only for language, we
+        // have to update the tree to retrieve the counter values
+        if (!existingSuffixesIndices.isEmpty()) {
+            // Note that we first need to update all rows before updating the sameOutputs
+            // mapping.
+            // Indeed, we first have to correctly set all the counter values
+            for (RowImpl<I> row : allRows) {
                 ObservationTreeNode<I> node = observationTreeRoot.getPrefix(row.getLabel(), 0);
                 for (int suffixIndex : existingSuffixesIndices) {
                     ObservationTreeNode<I> nodeForSuffix = node.getPrefix(getSuffix(suffixIndex), 0);
@@ -588,6 +595,12 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
                 }
             }
 
+            for (RowImpl<I> row : allRows) {
+                outputsOfRowChanged(row);
+            }
+        }
+
+        for (RowImpl<I> row : allRows) {
             createTreeNodes(row, newSuffixList, oracle);
         }
 
@@ -757,28 +770,19 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
     private List<List<Row<I>>> updateApproxSets() {
         Map<Integer, List<Row<I>>> unclosed = new HashMap<>();
 
-        // TODO: optimize
-        sameOutputs.clear();
-        sameOutputsIds.clear();
-        for (RowImpl<I> row : allRows) {
-            List<Boolean> outputs = row.getOutputs();
-            int id = sameOutputsIds.getOrDefault(outputs, NO_ID);
-            if (id == NO_ID) {
-                id = sameOutputsIds.size();
-                sameOutputsIds.put(outputs, id);
-                sameOutputs.put(id, new HashSet<>());
-            }
-            sameOutputs.get(id).add(row);
-            row.setSameOutputsId(id);
+        Set<RowImpl<I>> rowsToUpdate = new HashSet<>();
+        for (int sameOutputsId : sameOutputsToUpdateApprox) {
+            rowsToUpdate.addAll(sameOutputs.get(sameOutputsId));
         }
 
-        // Set<RowImpl<I>> rowsToUpdate = new HashSet<>();
-        // for (int sameOutputsId : sameOutputsPotentiallyUnclosed) {
-        // for (RowImpl<I> row : sameOutputs.get(sameOutputsId)) {
-        // rowsToUpdate.add(row);
-        // }
-        // }
-        Set<RowImpl<I>> rowsToUpdate = new HashSet<>(allRows);
+        for (Map.Entry<Integer, Set<RowImpl<I>>> entry : sameOutputs.entrySet()) {
+            for (RowImpl<I> r : entry.getValue()) {
+                for (RowImpl<I> ro : entry.getValue()) {
+                    assert r.getOutputs().equals(ro.getOutputs());
+                    assert r.getSameOutputsId() == ro.getSameOutputsId();
+                }
+            }
+        }
 
         Map<Integer, Set<Integer>> newApprox = new HashMap<>();
         Map<Set<Integer>, Integer> approxToApproxId = new HashMap<>();
@@ -790,18 +794,18 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         // We then compute only what is needed
 
         // We copy the classes that do not have to be modified
-        // for (RowImpl<I> row : allRows) {
-        // int approxId = NO_APPROX;
-        // if (!rowsToUpdate.contains(row)) {
-        // approxId = row.getApproxId();
-        // if (!newApprox.containsKey(row.getApproxId())) {
-        // Set<Integer> approxOfRow = approx.get(approxId);
-        // newApprox.put(approxId, approxOfRow);
-        // approxToApproxId.put(approxOfRow, approxId);
-        // freeApproxIds.remove(approxId);
-        // }
-        // }
-        // }
+        for (RowImpl<I> row : allRows) {
+            int approxId = NO_APPROX;
+            if (!rowsToUpdate.contains(row)) {
+                approxId = row.getApproxId();
+                if (!newApprox.containsKey(row.getApproxId())) {
+                    Set<Integer> approxOfRow = approx.get(approxId);
+                    newApprox.put(approxId, approxOfRow);
+                    approxToApproxId.put(approxOfRow, approxId);
+                    freeApproxIds.remove(approxId);
+                }
+            }
+        }
 
         // We compute the new approx sets
         for (RowImpl<I> row : rowsToUpdate) {
@@ -917,30 +921,7 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
             row.addSuffix(node);
         }
 
-        List<Boolean> outputs = row.getOutputs();
-        int outputsId = sameOutputsIds.getOrDefault(outputs, NO_ID);
-        int oldId = row.getSameOutputsId();
-        if (oldId != NO_ID) {
-            sameOutputs.get(oldId).remove(row);
-            if (sameOutputs.get(oldId).isEmpty()) {
-                freeSameOutputsIds.add(oldId);
-                outputsId = oldId;
-            }
-            sameOutputsToUpdateApprox.add(oldId);
-        }
-        if (outputsId == NO_ID) {
-            if (freeSameOutputsIds.isEmpty()) {
-                outputsId = sameOutputsIds.size();
-            } else {
-                Iterator<Integer> itr = freeSameOutputsIds.iterator();
-                outputsId = itr.next();
-                itr.remove();
-            }
-            sameOutputsIds.put(outputs, outputsId);
-            sameOutputs.put(outputsId, new HashSet<>());
-        }
-        sameOutputs.get(outputsId).add(row);
-        row.setSameOutputsId(outputsId);
+        outputsOfRowChanged(row);
     }
 
     private RowImpl<I> createSpRow(Word<I> prefix) {
@@ -997,41 +978,52 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         return observationTreeRoot;
     }
 
-    void updateOutputs(RowImpl<I> row) {
-        // First, we check if the outputs actually changed
+    void outputsOfRowChanged(RowImpl<I> row) {
         List<Boolean> outputs = row.getOutputs();
-        int id = sameOutputsIds.getOrDefault(outputs, NO_ID);
-        int oldId = row.getSameOutputsId();
-        // If not, we have nothing to change
-        if (id == oldId && id != NO_ID) {
+        int currentId = row.getSameOutputsId();
+        int newId = sameOutputsIds.getOrDefault(outputs, NO_ID);
+
+        // If the outputs did not actually change, we have nothing to do
+        if (newId == currentId && newId != NO_ID) {
             return;
         }
-        // Otherwise, we must update the storage
-        if (oldId != NO_ID) {
-            sameOutputs.get(oldId).remove(row);
-            if (sameOutputs.get(oldId).isEmpty()) {
-                freeSameOutputsIds.add(oldId);
-                id = oldId;
+
+        // If the row already has an id, we remove the row from the associated sets
+        if (currentId != NO_ID) {
+            sameOutputs.get(currentId).remove(row);
+            if (sameOutputs.get(currentId).isEmpty()) {
+                sameOutputs.remove(currentId);
+                sameOutputsIds.values().remove(currentId);
+                freeSameOutputsIds.add(currentId);
+
+                if (sameOutputsToUpdateApprox.contains(currentId)) {
+                    sameOutputsToUpdateApprox.remove(currentId);
+                }
+            } else {
+                sameOutputsToUpdateApprox.add(currentId);
             }
-            sameOutputsToUpdateApprox.add(oldId);
         }
-        if (id == NO_ID) {
+
+        if (newId == NO_ID) {
             if (freeSameOutputsIds.isEmpty()) {
-                id = sameOutputsIds.size();
+                newId = sameOutputsIds.size();
             } else {
                 Iterator<Integer> itr = freeSameOutputsIds.iterator();
-                id = itr.next();
+                newId = itr.next();
                 itr.remove();
             }
-            sameOutputs.put(id, new HashSet<>());
-        }
-        row.setSameOutputsId(id);
-        sameOutputs.get(id).add(row);
 
-        sameOutputsToUpdateApprox.add(id);
+            sameOutputs.put(newId, new HashSet<>());
+            sameOutputsIds.put(outputs, newId);
+        }
+        row.setSameOutputsId(newId);
+        sameOutputs.get(newId).add(row);
+        sameOutputsToUpdateApprox.add(newId);
     }
 
     void changedCounterValue(RowImpl<I> row) {
-        sameOutputsToUpdateApprox.add(row.getSameOutputsId());
+        if (row.getSameOutputsId() != NO_ID) {
+            sameOutputsToUpdateApprox.add(row.getSameOutputsId());
+        }
     }
 }

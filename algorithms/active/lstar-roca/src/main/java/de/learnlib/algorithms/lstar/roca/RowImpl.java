@@ -10,7 +10,8 @@ import net.automatalib.words.Word;
 /**
  * An implementation of a row for {@link ObservationTableWithCounterValuesROCA}.
  * 
- * A row has a list of {@link ObservationTreeNode}s that are used to store the row contents.
+ * A row has a list of {@link ObservationTreeNode}s that are used to store the
+ * row contents.
  * 
  * @author Gaëtan Staquet
  */
@@ -111,7 +112,7 @@ class RowImpl<I> implements Row<I> {
 
     List<PairCounterValueOutput<Boolean>> getRowContents() {
         List<PairCounterValueOutput<Boolean>> cvOutputs = new ArrayList<>(nodes.size());
-        for (int i = 0 ; i < numberOfSuffixes() ; i++) {
+        for (int i = 0; i < numberOfSuffixes(); i++) {
             ObservationTreeNode<I> node = nodes.get(i);
             if (!table.isSuffixOnlyForLanguage(i)) {
                 PairCounterValueOutput<Boolean> cvOutput = node.getCounterValueOutput();
@@ -124,12 +125,11 @@ class RowImpl<I> implements Row<I> {
 
     List<PairCounterValueOutput<Boolean>> getWholeRowContents() {
         List<PairCounterValueOutput<Boolean>> cvOutputs = new ArrayList<>(nodes.size());
-        for (int i = 0 ; i < numberOfSuffixes() ; i++) {
-            ObservationTreeNode<I> node  = nodes.get(i);
+        for (int i = 0; i < numberOfSuffixes(); i++) {
+            ObservationTreeNode<I> node = nodes.get(i);
             if (table.isSuffixOnlyForLanguage(i)) {
                 cvOutputs.add(new PairCounterValueOutput<>(node.getOutput(), -2));
-            }
-            else {
+            } else {
                 cvOutputs.add(node.getCounterValueOutput());
             }
         }
@@ -138,7 +138,7 @@ class RowImpl<I> implements Row<I> {
 
     List<Boolean> getOutputs() {
         List<Boolean> outputs = new ArrayList<>();
-        for (int i = 0 ; i < numberOfSuffixes() ; i++) {
+        for (int i = 0; i < numberOfSuffixes(); i++) {
             ObservationTreeNode<I> node = nodes.get(i);
             if (!table.isSuffixOnlyForLanguage(i)) {
                 outputs.add(node.getOutput());
@@ -164,15 +164,28 @@ class RowImpl<I> implements Row<I> {
         return !getRowContents().isEmpty();
     }
 
-    void updateOutput() {
-        table.updateOutputs(this);
+    /**
+     * Call this function to notify the row that one of its underlying nodes changed
+     * its output
+     */
+    void outputChange() {
+        table.outputsOfRowChanged(this);
     }
 
-    void updateCounterValue() {
+    /**
+     * Call this function to notify the row that one of its underlying nodes changed
+     * its counter value
+     */
+    void counterValueChange() {
         table.changedCounterValue(this);
     }
 
     ObservationTableWithCounterValuesROCA<I> getTable() {
         return table;
+    }
+
+    @Override
+    public String toString() {
+        return getLabel().toString();
     }
 }
