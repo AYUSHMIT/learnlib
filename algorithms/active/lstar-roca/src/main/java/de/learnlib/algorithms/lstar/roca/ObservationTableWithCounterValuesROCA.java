@@ -389,8 +389,12 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
     public @Nullable BottomInconsistency<I> findBottomInconsistency() {
         for (RowImpl<I> row : allRows) {
+            // We only test the rows that are in the Approx(row) and that are not yet seen
+            // in the loop.
+            // That is, we only want rows with rowId strictly greater than the current rowId
             // @formatter:off
             Set<RowImpl<I>> approxOfRow = approx.get(row.getApproxId()).stream().
+                filter(i -> row.getRowId() < i).
                 map(i -> allRows.get(i)).
                 collect(Collectors.toSet());
             // @formatter:on
@@ -451,7 +455,8 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
     private void setSuffixesOnlyForLanguage(int startSuffixIndex, int endSuffixIndex, boolean onlyForLanguage) {
         if (!onlyForLanguage) {
-            Set<Integer> range = IntStream.range(startSuffixIndex, endSuffixIndex + 1).boxed().collect(Collectors.toSet());
+            Set<Integer> range = IntStream.range(startSuffixIndex, endSuffixIndex + 1).boxed()
+                    .collect(Collectors.toSet());
             classicalSuffixIndices.addAll(range);
         }
     }
