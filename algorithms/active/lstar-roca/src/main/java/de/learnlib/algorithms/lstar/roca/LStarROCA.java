@@ -132,7 +132,6 @@ public class LStarROCA<I>
         } else if (!MQUtil.isCounterexample(ceQuery, hypothesis)) {
             return false;
         } else {
-            // TODO: what is the best strategy for handling a counterexample?
             Word<I> counterexample = ceQuery.getInput();
             unclosed = table.increaseCounterLimit(counterLimit, counterexample.prefixes(false), Collections.emptyList(),
                     membershipOracle);
@@ -161,7 +160,12 @@ public class LStarROCA<I>
             int oldDistinctRows = table.numberOfDistinctRows();
             int oldSuffixes = table.numberOfSuffixes();
 
-            // TODO: what is the best strategy for handling a counterexample?
+            // With the fact that the counter value of a word is known only if the word is
+            // the known prefix of the target language, adding the prefixes of the
+            // counterexample may not be sufficient to find new equivalence classes.
+            // So, we instead add the suffixes of the counterexample in order to split as
+            // much Approx sets as we can. New representatives are then found by making the
+            // table closed.
             List<Word<I>> prefixes = ce.getInput().prefixes(false);
             List<List<Row<I>>> unclosed = table.addShortPrefixes(prefixes, membershipOracle);
             completeConsistentTable(unclosed, false);
@@ -314,16 +318,8 @@ public class LStarROCA<I>
 
                 // v·s'' is accepted
                 Word<I> v_s_prime = v.concat(s_second);
-                if (membershipOracle.answerQuery(v_s_prime)) {
-                    // TODO: use tree to reduce number of counter value queries
-                    boolean in_language = true;
-                    for (Word<I> prefix : v_s_prime.prefixes(false)) {
-                        if (counterValueOracle.answerQuery(prefix) > counterLimit) {
-                            in_language = false;
-                            break;
-                        }
-                    }
-                    return Pair.of(in_language, s_second);
+                if (table.getObservationTreeRoot().isSuffixAccepted(v_s_prime, 0, membershipOracle, counterValueOracle, counterLimit)) {
+                    return Pair.of(true, s_second);
                 } else {
                     return Pair.of(false, s_second);
                 }

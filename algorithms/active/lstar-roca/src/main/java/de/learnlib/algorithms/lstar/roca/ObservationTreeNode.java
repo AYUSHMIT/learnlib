@@ -1,5 +1,7 @@
 package de.learnlib.algorithms.lstar.roca;
 
+import static de.learnlib.algorithms.lstar.roca.ObservationTableWithCounterValuesROCA.UNKNOWN_COUNTER_VALUE;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -13,7 +15,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import de.learnlib.api.oracle.MembershipOracle;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
-import static de.learnlib.algorithms.lstar.roca.ObservationTableWithCounterValuesROCA.UNKNOWN_COUNTER_VALUE;
 
 /**
  * A node in a prefix tree used by {@link ObservationTableWithCounterValuesROCA}
@@ -97,6 +98,7 @@ class ObservationTreeNode<I> {
 
     private boolean inPrefix = false;
     private boolean isOutsideCounterLimit = false;
+    private boolean wasUsedToKnowAcceptanceOfWordNotInTable = false;
 
     ObservationTreeNode(Word<I> prefix, ObservationTreeNode<I> parent, Alphabet<I> alphabet) {
         this.parent = parent;
@@ -188,7 +190,6 @@ class ObservationTreeNode<I> {
     }
 
     private void setOutput(boolean output) {
-        assert prefix.equals(Word.epsilon()) || isInTable();
         cvOutput.setOutput(output ? Output.ACCEPTED : Output.REJECTED);
     }
 
@@ -218,6 +219,16 @@ class ObservationTreeNode<I> {
 
     private void setOutsideCounterLimit(boolean outsideCounterLimit) {
         this.isOutsideCounterLimit = outsideCounterLimit;
+    }
+
+    private void markNotUsedOnlyForAcceptanceWordNotInTable() {
+        if (!wasUsedToKnowAcceptanceOfWordNotInTable) {
+            return;
+        }
+        wasUsedToKnowAcceptanceOfWordNotInTable = false;
+        if (parent != null) {
+            parent.markNotUsedOnlyForAcceptanceWordNotInTable();
+        }
     }
 
     boolean isInTable() {
@@ -314,6 +325,14 @@ class ObservationTreeNode<I> {
             MembershipOracle<I, Boolean> membershipOracle, MembershipOracle.CounterValueOracle<I> counterValueOracle,
             int counterLimit, RowImpl<I> row, int suffixIndex) {
         if (indexInSuffix == suffix.length()) {
+            // The node was created before but was not actively used. So, we consider it as
+            // a fresh node
+            if (wasUsedToKnowAcceptanceOfWordNotInTable) {
+                return addSuffixInTableNewInTree(suffix, indexInSuffix, membershipOracle, counterValueOracle,
+                        counterLimit, row, suffixIndex);
+            }
+            markNotUsedOnlyForAcceptanceWordNotInTable();
+
             if (!row.getTable().isSuffixOnlyForLanguage(suffixIndex) && isOnlyForLanguage()) {
                 if (getStoredOutput() != Output.UNKNOWN && isInPrefix()
                         && getStoredCounterValue() == UNKNOWN_COUNTER_VALUE) {
@@ -457,6 +476,7 @@ class ObservationTreeNode<I> {
             int counterLimit, RowImpl<I> row, int suffixIndex) {
         if (indexInSuffix == suffix.length()) {
             addToTableCells(row, suffixIndex);
+            markNotUsedOnlyForAcceptanceWordNotInTable();
             // We know that the current node has just been added in the tree.
             // So, we ask a membership query. If the answer is negative, we have nothing to
             // do (the node and the newly added ancestors are not in the prefix of the
@@ -465,8 +485,13 @@ class ObservationTreeNode<I> {
             // i.e., if there is an ancestor with a counter value exceeding the counter
             // limit.
             // This is the similar to case 2.2.2.1. of the main function.
-            boolean actualOutput = membershipOracle.answerQuery(prefix);
-            setOutput(actualOutput);
+            boolean actualOutput;
+            if (getStoredOutput() == Output.UNKNOWN) {
+                actualOutput = membershipOracle.answerQuery(prefix);
+                setOutput(actualOutput);
+            } else {
+                actualOutput = getStoredOutput() == Output.ACCEPTED;
+            }
 
             if (actualOutput) {
                 boolean outside_limit = determineIfAncestorExceedsCounterLimit(counterValueOracle, counterLimit);
@@ -504,6 +529,87 @@ class ObservationTreeNode<I> {
             ObservationTreeNode<I> successor = createSuccessor(symbol);
             return successor.addSuffixInTableNewInTree(suffix, indexInSuffix + 1, membershipOracle, counterValueOracle,
                     counterLimit, row, suffixIndex);
+        }
+    }
+
+    /**
+     * Uses the tree to know if the provided suffix is in the language (up to the
+     * counter limit).
+     * 
+     * If the nodes are not yet in the tree, they are created.
+     * 
+     * @param suffix
+     * @param indexInSuffix
+     * @param membershipOracle
+     * @param counterValueOracle
+     * @param counterLimit
+     * @return True iff suffix is accepted
+     */
+    boolean isSuffixAccepted(Word<I> suffix, int indexInSuffix,
+            MembershipOracle.ROCAMembershipOracle<I> membershipOracle,
+            MembershipOracle.CounterValueOracle<I> counterValueOracle, int counterLimit) {
+        if (indexInSuffix == suffix.length()) {
+            if (getOutput()) {
+                return true;
+            }
+            if (getStoredOutput() == Output.UNKNOWN) {
+                setOutput(membershipOracle.answerQuery(prefix));
+            }
+            if (getStoredOutput() == Output.REJECTED) {
+                return false;
+            } else {
+                boolean outside_limit = determineIfAncestorExceedsCounterLimit(counterValueOracle, counterLimit);
+                if (!outside_limit) {
+                    setInPrefix(true);
+                    setOutsideCounterLimit(false);
+                    if (!isOnlyForLanguage()) {
+                        setCounterValue(0);
+                    }
+                    if (parent != null) {
+                        parent.inPrefixUpdate(membershipOracle, counterValueOracle, counterLimit);
+                    }
+                    return true;
+                } else {
+                    markExceedingCounterLimit();
+                    return false;
+                }
+            }
+        } else {
+            I symbol = suffix.getSymbol(indexInSuffix);
+            ObservationTreeNode<I> successor = getSuccessor(symbol);
+            if (successor == null) {
+                successor = createSuccessor(symbol);
+                return successor.isSuffixAcceptedNewInTree(suffix, indexInSuffix + 1, membershipOracle,
+                        counterValueOracle, counterLimit);
+            } else {
+                return successor.isSuffixAccepted(suffix, indexInSuffix + 1, membershipOracle, counterValueOracle,
+                        counterLimit);
+            }
+        }
+    }
+
+    private boolean isSuffixAcceptedNewInTree(Word<I> suffix, int indexInSuffix,
+            MembershipOracle.ROCAMembershipOracle<I> membershipOracle,
+            MembershipOracle.CounterValueOracle<I> counterValueOracle, int counterLimit) {
+        wasUsedToKnowAcceptanceOfWordNotInTable = true;
+        if (indexInSuffix == suffix.length()) {
+            boolean output = membershipOracle.answerQuery(prefix);
+            setOutput(output);
+            if (!output) {
+                return false;
+            } else {
+                if (determineIfAncestorExceedsCounterLimit(counterValueOracle, counterLimit)) {
+                    markExceedingCounterLimit();
+                    return false;
+                } else {
+                    return true;
+                }
+            }
+        } else {
+            I symbol = suffix.getSymbol(indexInSuffix);
+            ObservationTreeNode<I> successor = createSuccessor(symbol);
+            return successor.isSuffixAcceptedNewInTree(suffix, indexInSuffix + 1, membershipOracle, counterValueOracle,
+                    counterLimit);
         }
     }
 
@@ -738,7 +844,7 @@ class ObservationTreeNode<I> {
     private void createRepresentation(StringBuilder buffer, String prefix, String childrenPrefix) {
         buffer.append(prefix);
         buffer.append(this.prefix + " " + this.cvOutput + " " + isInPrefix() + " " + isInTable() + " "
-                + isOutsideCounterLimit() + " " + isOnlyForLanguage());
+                + isOutsideCounterLimit() + " " + isOnlyForLanguage() + " " + wasUsedToKnowAcceptanceOfWordNotInTable);
         buffer.append('\n');
         for (Iterator<ObservationTreeNode<I>> it = successors.values().iterator(); it.hasNext();) {
             ObservationTreeNode<I> next = it.next();
