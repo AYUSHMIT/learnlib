@@ -1,7 +1,6 @@
 package de.learnlib.algorithms.lstar.roca;
 
 import java.util.ArrayList;
-import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -15,12 +14,14 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.datastructure.observationtable.Inconsistency;
 import de.learnlib.datastructure.observationtable.MutableObservationTable;
+import de.learnlib.datastructure.observationtable.OTUtils;
 import de.learnlib.datastructure.observationtable.ObservationTable;
 import de.learnlib.datastructure.observationtable.Row;
 import net.automatalib.automata.oca.AcceptanceMode;
@@ -110,7 +111,7 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
     private final List<Word<I>> suffixes = new ArrayList<>();
     private final Set<Word<I>> suffixesSet = new HashSet<>();
-    private final BitSet suffixIsOnlyForLanguage = new BitSet();
+    private final Set<Integer> classicalSuffixIndices = new HashSet<>();
 
     private final Alphabet<I> alphabet;
     private int alphabetSize;
@@ -258,11 +259,11 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
     }
 
     public int numberOfForLanguageOnlySuffixes() {
-        return suffixIsOnlyForLanguage.cardinality();
+        return numberOfSuffixes() - numberOfClassicalSuffixes();
     }
 
     public int numberOfClassicalSuffixes() {
-        return numberOfSuffixes() - numberOfForLanguageOnlySuffixes();
+        return classicalSuffixIndices.size();
     }
 
     public int getCounterLimit() {
@@ -439,7 +440,20 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
     }
 
     public boolean isSuffixOnlyForLanguage(int suffixIndex) {
-        return suffixIsOnlyForLanguage.get(suffixIndex);
+        return !classicalSuffixIndices.contains(suffixIndex);
+    }
+
+    private void setSuffixOnlyForLanguage(int suffixIndex, boolean onlyForLanguage) {
+        if (!onlyForLanguage) {
+            classicalSuffixIndices.add(suffixIndex);
+        }
+    }
+
+    private void setSuffixesOnlyForLanguage(int startSuffixIndex, int endSuffixIndex, boolean onlyForLanguage) {
+        if (!onlyForLanguage) {
+            Set<Integer> range = IntStream.range(startSuffixIndex, endSuffixIndex + 1).boxed().collect(Collectors.toSet());
+            classicalSuffixIndices.addAll(range);
+        }
     }
 
     public boolean isSuffixOnlyForLanguage(Word<I> suffix) {
@@ -547,7 +561,7 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
         for (Word<I> suffix : initialSuffixes) {
             if (suffixesSet.add(suffix)) {
-                suffixIsOnlyForLanguage.set(numberOfSuffixes(), false);
+                setSuffixOnlyForLanguage(numberOfSuffixes(), false);
                 suffixes.add(suffix);
             }
         }
@@ -597,7 +611,7 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
                 int suffixIndex = suffixes.indexOf(suffix);
                 if (isSuffixOnlyForLanguage(suffixIndex)) {
                     existingSuffixesIndices.add(suffixIndex);
-                    suffixIsOnlyForLanguage.set(suffixIndex, false);
+                    setSuffixOnlyForLanguage(suffixIndex, false);
                 }
             }
         }
@@ -606,7 +620,8 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
             return false;
         }
 
-        this.suffixIsOnlyForLanguage.set(numberOfSuffixes(), numberOfSuffixes() + newSuffixList.size(), false);
+        int oldNumberOfSuffixes = numberOfSuffixes();
+        setSuffixesOnlyForLanguage(oldNumberOfSuffixes, oldNumberOfSuffixes + newSuffixList.size(), false);
         this.suffixes.addAll(newSuffixList);
 
         // For the suffixes that were already known but were used only for language, we
@@ -649,7 +664,7 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         }
 
         int oldNumberOfSuffixes = numberOfSuffixes();
-        this.suffixIsOnlyForLanguage.set(oldNumberOfSuffixes, oldNumberOfSuffixes + newSuffixList.size(), true);
+        setSuffixesOnlyForLanguage(oldNumberOfSuffixes, oldNumberOfSuffixes + newSuffixList.size(), true);
         this.suffixes.addAll(newSuffixList);
 
         for (RowImpl<I> row : allRows) {
@@ -1023,10 +1038,8 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
                 sameOutputs.remove(currentId);
                 sameOutputsIds.values().remove(currentId);
                 freeSameOutputsIds.add(currentId);
-
-                if (sameOutputsToUpdateApprox.contains(currentId)) {
-                    sameOutputsToUpdateApprox.remove(currentId);
-                }
+                // Since the set is now empty, we do not have to re-compute Approx for it
+                sameOutputsToUpdateApprox.remove(currentId);
             } else {
                 sameOutputsToUpdateApprox.add(currentId);
             }
