@@ -518,10 +518,9 @@ class ObservationTreeNode<I> {
                 askCounterValueQuery(counterValueOracle, counterLimit);
             }
 
-            // We know that there is only row using this node
-            row.outputChange();
+            notifyOutputChange();
             if (getCounterValue() != UNKNOWN_COUNTER_VALUE) {
-                row.counterValueChange();
+                notifyCounterValueChange();
             }
             return this;
         } else {
@@ -729,8 +728,8 @@ class ObservationTreeNode<I> {
         // Invariant: the parent's counter value does not exceed the counter limit (or
         // if it does, we do not yet have a witness)
         assert parent == null || !parent.isOutsideCounterLimit();
-        if (getCounterValue() == UNKNOWN_COUNTER_VALUE) {
-            if (getStoredOutput() == Output.UNKNOWN && isInTable()) {
+        if (getCounterValue() == UNKNOWN_COUNTER_VALUE && isInTable()) {
+            if (getStoredOutput() == Output.UNKNOWN) {
                 setOutput(membershipOracle.answerQuery(prefix));
             }
             if (getStoredOutput() == Output.ACCEPTED) {
@@ -742,6 +741,7 @@ class ObservationTreeNode<I> {
                         setCounterValue(0);
                     }
                     notifyOutputChange();
+                    notifyCounterValueChange();
                     if (parent != null) {
                         parent.inPrefixUpdate(membershipOracle, counterValueOracle, counterLimit);
                     }
@@ -756,6 +756,15 @@ class ObservationTreeNode<I> {
             } else if (!parent.isOutsideCounterLimit()) {
                 setOutsideCounterLimit(false);
                 notifyCounterValueChange();
+            }
+        }
+
+        if (!isInTable()) {
+            if (getStoredCounterValue() != UNKNOWN_COUNTER_VALUE && getStoredCounterValue() > counterLimit) {
+                setOutsideCounterLimit(true);
+            }
+            else {
+                setOutsideCounterLimit(false);
             }
         }
 

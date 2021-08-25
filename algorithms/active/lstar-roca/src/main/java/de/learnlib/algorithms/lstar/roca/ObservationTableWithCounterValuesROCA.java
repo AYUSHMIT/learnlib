@@ -9,7 +9,6 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
@@ -816,7 +815,7 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
     }
 
     private List<List<Row<I>>> updateApproxSets() {
-        Map<Integer, List<Row<I>>> unclosed = new HashMap<>();
+        Map<List<PairCounterValueOutput<Boolean>>, List<Row<I>>> unclosed = new HashMap<>();
 
         Set<RowImpl<I>> rowsToUpdate = new HashSet<>();
         for (int sameOutputsId : sameOutputsToUpdateApprox) {
@@ -880,11 +879,11 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
             } else {
                 int approxId;
                 if (!approxHasIntersectionWithShortPrefixes(approxOfRow)) {
-                    int unclosedId = Objects.hash(fullRowContents(row));
-                    if (!unclosed.containsKey(unclosedId)) {
-                        unclosed.put(unclosedId, new ArrayList<>());
+                    List<PairCounterValueOutput<Boolean>> contents = row.getRowContents();
+                    if (!unclosed.containsKey(contents)) {
+                        unclosed.put(contents, new ArrayList<>());
                     }
-                    unclosed.get(unclosedId).add(row);
+                    unclosed.get(contents).add(row);
                     approxId = NO_APPROX;
                 } else {
                     approxId = approxToApproxId.getOrDefault(approxOfRow, NO_APPROX);

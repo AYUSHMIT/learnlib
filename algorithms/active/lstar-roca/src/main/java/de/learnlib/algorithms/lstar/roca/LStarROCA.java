@@ -247,9 +247,7 @@ public class LStarROCA<I>
         List<Row<I>> closingRows = new ArrayList<>(unclosed.size());
 
         for (List<Row<I>> rowList : unclosed) {
-            if (rowList.size() != 0) {
-                closingRows.add(rowList.get(0));
-            }
+            closingRows.add(rowList.get(0));
         }
 
         return closingRows;
