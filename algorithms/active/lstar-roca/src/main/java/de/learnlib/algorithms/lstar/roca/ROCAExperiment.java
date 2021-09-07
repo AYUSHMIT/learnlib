@@ -22,7 +22,7 @@ import net.automatalib.words.Alphabet;
 public final class ROCAExperiment<I> extends AbstractExperiment<ROCA<?, I>> {
 
     public static final String LEARNING_ROCA_PROFILE_KEY = "Learning ROCA";
-    public static final String COUNTEREXAMPLE_PROFILE_KEY = "Searching for counterexample";
+    public static final String COUNTEREXAMPLE_PROFILE_KEY = "Searching for counterexample ROCA";
 
     private static final LearnLogger LOGGER = LearnLogger.getLogger(ROCAExperiment.class);
 

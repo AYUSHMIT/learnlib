@@ -20,6 +20,7 @@ import de.learnlib.datastructure.observationtable.Inconsistency;
 import de.learnlib.datastructure.observationtable.OTLearner;
 import de.learnlib.datastructure.observationtable.Row;
 import de.learnlib.util.MQUtil;
+import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.SupportsGrowingAlphabet;
 import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.oca.automatoncountervalues.AutomatonWithCounterValues;
@@ -49,6 +50,9 @@ import net.automatalib.words.impl.Alphabets;
  */
 public class LStarROCA<I>
         implements OTLearner.OTLearnerROCA<I>, GlobalSuffixLearner<ROCA<?, I>, I, Boolean>, SupportsGrowingAlphabet<I> {
+
+    public static final String CLOSED_TABLE_PROFILE_KEY = "Making the table closed, Sigma-consistent, and bottom-consistent";
+    public static final String COUNTEREXAMPLE_DFA_PROFILE_KEY = "Searching for counterexample DFA";
 
     protected final Alphabet<I> alphabet;
 
@@ -155,7 +159,9 @@ public class LStarROCA<I>
             }
 
             updateHypothesis();
+            SimpleProfiler.start(COUNTEREXAMPLE_DFA_PROFILE_KEY);;
             DefaultQuery<I, Boolean> ce = restrictedAutomatonEquivalenceOracle.findCounterExample(hypothesis, alphabet);
+            SimpleProfiler.stop(COUNTEREXAMPLE_DFA_PROFILE_KEY);;
 
             if (ce == null) {
                 return;
@@ -176,7 +182,9 @@ public class LStarROCA<I>
             completeConsistentTable(unclosed, false);
             List<Word<I>> suffixes = ce.getInput().suffixes(false);
             unclosed = table.addSuffixes(suffixes, membershipOracle);
+            SimpleProfiler.start(CLOSED_TABLE_PROFILE_KEY);
             completeConsistentTable(unclosed, true);
+            SimpleProfiler.stop(CLOSED_TABLE_PROFILE_KEY);
 
             assert table.numberOfDistinctRows() > oldDistinctRows || table.numberOfSuffixes() > oldSuffixes
                     : "Nothing was learnt during the last iteration for DFA";
