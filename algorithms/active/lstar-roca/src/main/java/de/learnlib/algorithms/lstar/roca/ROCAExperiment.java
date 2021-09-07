@@ -48,6 +48,10 @@ public final class ROCAExperiment<I> extends AbstractExperiment<ROCA<?, I>> {
         profileStop(LEARNING_ROCA_PROFILE_KEY);
 
         while (true) {
+            if (Thread.interrupted()) {
+                return null;
+            }
+
             final Collection<ROCA<?, I>> hypotheses = learningAlgorithm.getHypothesisModels();
 
             LOGGER.logPhase("Searching for counterexample");
@@ -97,6 +101,10 @@ public final class ROCAExperiment<I> extends AbstractExperiment<ROCA<?, I>> {
             }
 
             LOGGER.logCounterexample(counterexample.getInput().toString());
+
+            if (Thread.interrupted()) {
+                return null;
+            }
 
             // Next round
             rounds.increment();

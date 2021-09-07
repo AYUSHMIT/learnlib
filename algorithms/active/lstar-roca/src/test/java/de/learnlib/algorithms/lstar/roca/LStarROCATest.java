@@ -184,7 +184,7 @@ public class LStarROCATest {
         launch(example.getReferenceAutomaton(), example.getAlphabet());
     }
 
-    @Test(invocationCount = 10, timeOut = 1000)
+    @Test(invocationCount = 10)
     public void testLearningRandomROCA() {
         Alphabet<Character> alphabet = Alphabets.characters('a', 'b');
         int size = 2;

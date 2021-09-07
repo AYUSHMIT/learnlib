@@ -149,6 +149,11 @@ public class LStarROCA<I>
      */
     protected void learnDFA() {
         while (true) {
+            if (Thread.interrupted()) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+
             updateHypothesis();
             DefaultQuery<I, Boolean> ce = restrictedAutomatonEquivalenceOracle.findCounterExample(hypothesis, alphabet);
 
@@ -196,7 +201,15 @@ public class LStarROCA<I>
         boolean refined = false;
         List<List<Row<I>>> unclosedIter = unclosed;
         do {
+            if (Thread.interrupted()) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
             while (!unclosedIter.isEmpty()) {
+                if (Thread.interrupted()) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
                 List<Row<I>> closingRows = selectClosingRows(unclosedIter);
                 unclosedIter = table.toShortPrefixes(closingRows, membershipOracle);
                 refined = true;
@@ -209,6 +222,10 @@ public class LStarROCA<I>
                 // different states are possible).
                 Inconsistency<I> sigmaInconsistency;
                 do {
+                    if (Thread.interrupted()) {
+                        Thread.currentThread().interrupt();
+                        return false;
+                    }
                     sigmaInconsistency = table.findSigmaInconsistency();
                     if (sigmaInconsistency != null) {
                         Set<Word<I>> newSuffix = analyzeSigmaInconsistency(sigmaInconsistency);
@@ -224,6 +241,10 @@ public class LStarROCA<I>
                     // prefix.
                     BottomInconsistency<I> bottomInconsistency;
                     do {
+                        if (Thread.interrupted()) {
+                            Thread.currentThread().interrupt();
+                            return false;
+                        }
                         bottomInconsistency = table.findBottomInconsistency();
                         if (bottomInconsistency != null) {
                             Pair<Boolean, Word<I>> analysis = analyzeBottomInconsistency(bottomInconsistency);
