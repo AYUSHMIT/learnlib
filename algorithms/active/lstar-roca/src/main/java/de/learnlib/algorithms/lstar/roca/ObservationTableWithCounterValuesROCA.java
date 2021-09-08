@@ -24,6 +24,7 @@ import de.learnlib.datastructure.observationtable.OTUtils;
 import de.learnlib.datastructure.observationtable.ObservationTable;
 import de.learnlib.datastructure.observationtable.Row;
 import net.automatalib.automata.oca.AcceptanceMode;
+import net.automatalib.commons.util.ref.Refs;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
 import net.automatalib.words.impl.Alphabets;
@@ -112,6 +113,7 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
     private final Set<Word<I>> suffixesSet = new HashSet<>();
     private final Set<Integer> classicalSuffixIndices = new HashSet<>();
 
+    private final WordStorage<I> wordStorage = new WordStorage<>();
     private final Alphabet<I> alphabet;
     private int alphabetSize;
 
@@ -134,7 +136,9 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
             MembershipOracle.CounterValueOracle<I> counterValueOracle) {
         this.alphabet = alphabet;
         this.alphabetSize = alphabet.size();
-        this.observationTreeRoot = new ObservationTreeNode<>(Word.epsilon(), null, alphabet);
+        int wordId = this.wordStorage.addWord(Word.epsilon());
+        this.observationTreeRoot = new ObservationTreeNode<>(Refs.weak(this), new WordStorage.WordReference(wordId, 0),
+                null, alphabet);
         this.counterValueOracle = counterValueOracle;
     }
 
@@ -1070,5 +1074,9 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         if (row.getSameOutputsId() != NO_ID) {
             sameOutputsToUpdateApprox.add(row.getSameOutputsId());
         }
+    }
+
+    public WordStorage<I> getWordStorage() {
+        return wordStorage;
     }
 }

@@ -12,7 +12,9 @@ import java.util.Objects;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import de.learnlib.algorithms.lstar.roca.WordStorage.WordReference;
 import de.learnlib.api.oracle.MembershipOracle;
+import net.automatalib.commons.util.ref.Ref;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
 
@@ -91,16 +93,19 @@ class ObservationTreeNode<I> {
 
     private final Alphabet<I> alphabet;
 
-    private final Word<I> prefix;
+    private final WordReference prefix;
     private final PairCounterValueOutput<Output> cvOutput;
 
     private final List<TableCell<I>> tableCells = new ArrayList<>();
+    private final Ref<ObservationTableWithCounterValuesROCA<I>> table;
 
     private boolean inPrefix = false;
     private boolean isOutsideCounterLimit = false;
     private boolean wasUsedToKnowAcceptanceOfWordNotInTable = false;
 
-    ObservationTreeNode(Word<I> prefix, ObservationTreeNode<I> parent, Alphabet<I> alphabet) {
+    ObservationTreeNode(Ref<ObservationTableWithCounterValuesROCA<I>> table, WordReference prefix,
+            ObservationTreeNode<I> parent, Alphabet<I> alphabet) {
+        this.table = table;
         this.parent = parent;
         this.alphabet = alphabet;
         this.prefix = prefix;
@@ -109,7 +114,7 @@ class ObservationTreeNode<I> {
 
     public void initializeAsRoot(MembershipOracle<I, Boolean> membershipOracle,
             MembershipOracle.CounterValueOracle<I> counterValueOracle) {
-        assert prefix.equals(Word.epsilon());
+        assert prefix.equals(new WordReference(0, 0));
         boolean accepted = membershipOracle.answerQuery(Word.epsilon());
         setOutput(accepted);
         setOutsideCounterLimit(false);
@@ -276,7 +281,17 @@ class ObservationTreeNode<I> {
     }
 
     private ObservationTreeNode<I> createSuccessor(I symbol) {
-        ObservationTreeNode<I> successor = new ObservationTreeNode<>(prefix.append(symbol), this, alphabet);
+        WordReference successorWordReference;
+        Word<I> newWord = getPrefix().append(symbol);
+        if (successors.isEmpty()) {
+            table.get().getWordStorage().replaceWord(prefix.getWordId(), newWord);
+            successorWordReference = new WordReference(prefix.getWordId(), prefix.getLength() + 1);
+        } else {
+            int wordId = table.get().getWordStorage().addWord(newWord);
+            successorWordReference = new WordReference(wordId, prefix.getLength() + 1);
+        }
+
+        ObservationTreeNode<I> successor = new ObservationTreeNode<>(table, successorWordReference, this, alphabet);
         setSuccessor(symbol, successor);
         // If we already know that the current node is outside of the counter limit (due
         // to an ancestor's counter value), we want that information to be also present
@@ -288,7 +303,7 @@ class ObservationTreeNode<I> {
     }
 
     Word<I> getPrefix() {
-        return prefix;
+        return table.get().getWordStorage().getWord(prefix.getWordId(), prefix.getLength());
     }
 
     /**
@@ -336,7 +351,7 @@ class ObservationTreeNode<I> {
             if (!row.getTable().isSuffixOnlyForLanguage(suffixIndex) && isOnlyForLanguage()) {
                 if (getStoredOutput() != Output.UNKNOWN && isInPrefix()
                         && getStoredCounterValue() == UNKNOWN_COUNTER_VALUE) {
-                    setCounterValue(counterValueOracle.answerQuery(prefix));
+                    setCounterValue(counterValueOracle.answerQuery(getPrefix()));
                 }
             }
             addToTableCells(row, suffixIndex);
@@ -349,7 +364,7 @@ class ObservationTreeNode<I> {
             // to ask a counter value query (if we are using the node for full information)
             if (getStoredOutput() != Output.UNKNOWN) {
                 // Being in the prefix implies that we are outside the counter limit
-                assert (!isInPrefix() || !isOutsideCounterLimit()) : prefix;
+                assert (!isInPrefix() || !isOutsideCounterLimit()) : getPrefix();
                 if (!isOnlyForLanguage()) {
                     if (isInPrefix() && getCounterValue() == UNKNOWN_COUNTER_VALUE) {
                         askCounterValueQuery(counterValueOracle, counterLimit);
@@ -376,7 +391,7 @@ class ObservationTreeNode<I> {
                     setOutput(false);
                     actualOutput = false;
                 } else {
-                    actualOutput = membershipOracle.answerQuery(prefix);
+                    actualOutput = membershipOracle.answerQuery(getPrefix());
                     setOutput(actualOutput);
                 }
 
@@ -487,7 +502,7 @@ class ObservationTreeNode<I> {
             // This is the similar to case 2.2.2.1. of the main function.
             boolean actualOutput;
             if (getStoredOutput() == Output.UNKNOWN) {
-                actualOutput = membershipOracle.answerQuery(prefix);
+                actualOutput = membershipOracle.answerQuery(getPrefix());
                 setOutput(actualOutput);
             } else {
                 actualOutput = getStoredOutput() == Output.ACCEPTED;
@@ -552,7 +567,7 @@ class ObservationTreeNode<I> {
                 return true;
             }
             if (getStoredOutput() == Output.UNKNOWN) {
-                setOutput(membershipOracle.answerQuery(prefix));
+                setOutput(membershipOracle.answerQuery(getPrefix()));
             }
             if (getStoredOutput() == Output.REJECTED) {
                 return false;
@@ -592,7 +607,7 @@ class ObservationTreeNode<I> {
             MembershipOracle.CounterValueOracle<I> counterValueOracle, int counterLimit) {
         wasUsedToKnowAcceptanceOfWordNotInTable = true;
         if (indexInSuffix == suffix.length()) {
-            boolean output = membershipOracle.answerQuery(prefix);
+            boolean output = membershipOracle.answerQuery(getPrefix());
             setOutput(output);
             if (!output) {
                 return false;
@@ -730,7 +745,7 @@ class ObservationTreeNode<I> {
         assert parent == null || !parent.isOutsideCounterLimit();
         if (getCounterValue() == UNKNOWN_COUNTER_VALUE && isInTable()) {
             if (getStoredOutput() == Output.UNKNOWN) {
-                setOutput(membershipOracle.answerQuery(prefix));
+                setOutput(membershipOracle.answerQuery(getPrefix()));
             }
             if (getStoredOutput() == Output.ACCEPTED) {
                 // We verify if the counter value of one of the ancestors exceeds the limit
@@ -762,8 +777,7 @@ class ObservationTreeNode<I> {
         if (!isInTable()) {
             if (getStoredCounterValue() != UNKNOWN_COUNTER_VALUE && getStoredCounterValue() > counterLimit) {
                 setOutsideCounterLimit(true);
-            }
-            else {
+            } else {
                 setOutsideCounterLimit(false);
             }
         }
@@ -788,7 +802,7 @@ class ObservationTreeNode<I> {
 
         if (isInTable()) {
             if (getStoredOutput() == Output.UNKNOWN) {
-                boolean output = membershipOracle.answerQuery(prefix);
+                boolean output = membershipOracle.answerQuery(getPrefix());
                 setOutput(output);
             }
             if (getStoredOutput() == Output.ACCEPTED) {

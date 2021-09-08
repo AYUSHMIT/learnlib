@@ -2,6 +2,7 @@ package de.learnlib.algorithms.lstar.roca;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import de.learnlib.datastructure.observationtable.Row;
 import net.automatalib.commons.smartcollections.ResizingArrayStorage;
@@ -198,5 +199,22 @@ class RowImpl<I> implements Row<I> {
     @Override
     public String toString() {
         return getLabel().toString();
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(getLabel());
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this) {
+            return true;
+        }
+        if (obj.getClass() != this.getClass()) {
+            return false;
+        }
+        RowImpl<?> r = (RowImpl<?>) obj;
+        return Objects.equals(r.getLabel(), this.getLabel());
     }
 }
