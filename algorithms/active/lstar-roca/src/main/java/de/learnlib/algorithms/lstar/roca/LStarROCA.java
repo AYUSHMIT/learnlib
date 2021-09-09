@@ -159,9 +159,9 @@ public class LStarROCA<I>
             }
 
             updateHypothesis();
-            SimpleProfiler.start(COUNTEREXAMPLE_DFA_PROFILE_KEY);;
+            SimpleProfiler.start(COUNTEREXAMPLE_DFA_PROFILE_KEY);
             DefaultQuery<I, Boolean> ce = restrictedAutomatonEquivalenceOracle.findCounterExample(hypothesis, alphabet);
-            SimpleProfiler.stop(COUNTEREXAMPLE_DFA_PROFILE_KEY);;
+            SimpleProfiler.stop(COUNTEREXAMPLE_DFA_PROFILE_KEY);
 
             if (ce == null) {
                 return;
@@ -171,17 +171,7 @@ public class LStarROCA<I>
             int oldDistinctRows = table.numberOfDistinctRows();
             int oldSuffixes = table.numberOfSuffixes();
 
-            // With the fact that the counter value of a word is known only if the word is
-            // the known prefix of the target language, adding the prefixes of the
-            // counterexample may not be sufficient to find new equivalence classes.
-            // So, we instead add the suffixes of the counterexample in order to split as
-            // much Approx sets as we can. New representatives are then found by making the
-            // table closed.
-            List<Word<I>> prefixes = ce.getInput().prefixes(false);
-            List<List<Row<I>>> unclosed = table.addShortPrefixes(prefixes, membershipOracle);
-            completeConsistentTable(unclosed, false);
-            List<Word<I>> suffixes = ce.getInput().suffixes(false);
-            unclosed = table.addSuffixes(suffixes, membershipOracle);
+            List<List<Row<I>>> unclosed = table.addShortPrefixes(ce.getInput().prefixes(false), membershipOracle);
             SimpleProfiler.start(CLOSED_TABLE_PROFILE_KEY);
             completeConsistentTable(unclosed, true);
             SimpleProfiler.stop(CLOSED_TABLE_PROFILE_KEY);
@@ -345,7 +335,8 @@ public class LStarROCA<I>
 
                 // v·s'' is accepted
                 Word<I> v_s_prime = v.concat(s_second);
-                if (table.getObservationTreeRoot().isSuffixAccepted(v_s_prime, 0, membershipOracle, counterValueOracle, counterLimit)) {
+                if (table.getObservationTreeRoot().isSuffixAccepted(v_s_prime, 0, membershipOracle, counterValueOracle,
+                        counterLimit)) {
                     return Pair.of(true, s_second);
                 } else {
                     return Pair.of(false, s_second);
