@@ -12,11 +12,10 @@ import java.util.Objects;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import de.learnlib.algorithms.lstar.roca.WordStorage.WordReference;
 import de.learnlib.api.oracle.MembershipOracle;
-import net.automatalib.commons.util.ref.Ref;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
+import net.automatalib.words.WordBuilder;
 
 /**
  * A node in a prefix tree used by {@link ObservationTableWithCounterValuesROCA}
@@ -93,28 +92,27 @@ class ObservationTreeNode<I> {
 
     private final Alphabet<I> alphabet;
 
-    private final WordReference prefix;
-    private final PairCounterValueOutput<Output> cvOutput;
+    private Output output;
+    private int counterValue;
 
     private final List<TableCell<I>> tableCells = new ArrayList<>();
-    private final Ref<ObservationTableWithCounterValuesROCA<I>> table;
+    private final ObservationTableWithCounterValuesROCA<I> table;
 
     private boolean inPrefix = false;
     private boolean isOutsideCounterLimit = false;
     private boolean wasUsedToKnowAcceptanceOfWordNotInTable = false;
 
-    ObservationTreeNode(Ref<ObservationTableWithCounterValuesROCA<I>> table, WordReference prefix,
-            ObservationTreeNode<I> parent, Alphabet<I> alphabet) {
+    ObservationTreeNode(ObservationTableWithCounterValuesROCA<I> table, ObservationTreeNode<I> parent,
+            Alphabet<I> alphabet) {
         this.table = table;
         this.parent = parent;
         this.alphabet = alphabet;
-        this.prefix = prefix;
-        this.cvOutput = new PairCounterValueOutput<>(Output.UNKNOWN, UNKNOWN_COUNTER_VALUE);
+        this.output = Output.UNKNOWN;
+        this.counterValue = UNKNOWN_COUNTER_VALUE;
     }
 
     public void initializeAsRoot(MembershipOracle<I, Boolean> membershipOracle,
             MembershipOracle.CounterValueOracle<I> counterValueOracle) {
-        assert prefix.equals(new WordReference(0, 0));
         boolean accepted = membershipOracle.answerQuery(Word.epsilon());
         setOutput(accepted);
         setOutsideCounterLimit(false);
@@ -127,7 +125,7 @@ class ObservationTreeNode<I> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(prefix);
+        return Objects.hash(this, parent);
     }
 
     @Override
@@ -143,7 +141,7 @@ class ObservationTreeNode<I> {
         }
 
         ObservationTreeNode<?> o = (ObservationTreeNode<?>) obj;
-        return Objects.equals(o.prefix, this.prefix) && Objects.equals(o.cvOutput, this.cvOutput);
+        return Objects.equals(o.getPrefix(), this.getPrefix()) && Objects.equals(o.output, this.output) && Objects.equals(o.counterValue, this.counterValue);
     }
 
     private void setSuccessor(I symbol, ObservationTreeNode<I> successor) {
@@ -195,19 +193,19 @@ class ObservationTreeNode<I> {
     }
 
     private void setOutput(boolean output) {
-        cvOutput.setOutput(output ? Output.ACCEPTED : Output.REJECTED);
+        this.output = output ? Output.ACCEPTED : Output.REJECTED;
     }
 
     private Output getStoredOutput() {
-        return cvOutput.getOutput();
+        return output;
     }
 
     private void setCounterValue(int counterValue) {
-        cvOutput.setCounterValue(counterValue);
+        this.counterValue = counterValue;
     }
 
     private int getStoredCounterValue() {
-        return cvOutput.getCounterValue();
+        return counterValue;
     }
 
     boolean isInPrefix() {
@@ -281,17 +279,7 @@ class ObservationTreeNode<I> {
     }
 
     private ObservationTreeNode<I> createSuccessor(I symbol) {
-        WordReference successorWordReference;
-        Word<I> newWord = getPrefix().append(symbol);
-        if (successors.isEmpty()) {
-            table.get().getWordStorage().replaceWord(prefix.getWordId(), newWord);
-            successorWordReference = new WordReference(prefix.getWordId(), prefix.getLength() + 1);
-        } else {
-            int wordId = table.get().getWordStorage().addWord(newWord);
-            successorWordReference = new WordReference(wordId, prefix.getLength() + 1);
-        }
-
-        ObservationTreeNode<I> successor = new ObservationTreeNode<>(table, successorWordReference, this, alphabet);
+        ObservationTreeNode<I> successor = new ObservationTreeNode<>(table, this, alphabet);
         setSuccessor(symbol, successor);
         // If we already know that the current node is outside of the counter limit (due
         // to an ancestor's counter value), we want that information to be also present
@@ -303,7 +291,21 @@ class ObservationTreeNode<I> {
     }
 
     Word<I> getPrefix() {
-        return table.get().getWordStorage().getWord(prefix.getWordId(), prefix.getLength());
+        return getPrefixInternal(0).toWord();
+    }
+
+    private WordBuilder<I> getPrefixInternal(int depthOfWord) {
+        if (parent == null) {
+            return new WordBuilder<>(depthOfWord + 1);
+        } else {
+            for (Map.Entry<Integer, ObservationTreeNode<I>> entry : parent.successors.entrySet()) {
+                if (entry.getValue() == this) {
+                    I symbol = alphabet.getSymbol(entry.getKey());
+                    return parent.getPrefixInternal(depthOfWord + 1).append(symbol);
+                }
+            }
+            return null;
+        }
     }
 
     /**
@@ -866,8 +868,9 @@ class ObservationTreeNode<I> {
 
     private void createRepresentation(StringBuilder buffer, String prefix, String childrenPrefix) {
         buffer.append(prefix);
-        buffer.append(this.prefix + " " + this.cvOutput + " " + isInPrefix() + " " + isInTable() + " "
-                + isOutsideCounterLimit() + " " + isOnlyForLanguage() + " " + wasUsedToKnowAcceptanceOfWordNotInTable);
+        buffer.append(getPrefix() + " " + getStoredOutput() + " " + getStoredCounterValue() + " " + isInPrefix() + " "
+                + isInTable() + " " + isOutsideCounterLimit() + " " + isOnlyForLanguage() + " "
+                + wasUsedToKnowAcceptanceOfWordNotInTable);
         buffer.append('\n');
         for (Iterator<ObservationTreeNode<I>> it = successors.values().iterator(); it.hasNext();) {
             ObservationTreeNode<I> next = it.next();
