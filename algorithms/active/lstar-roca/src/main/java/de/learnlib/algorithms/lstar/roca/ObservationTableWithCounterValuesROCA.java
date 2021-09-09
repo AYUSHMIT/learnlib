@@ -462,9 +462,9 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         }
     }
 
-    private void setSuffixesOnlyForLanguage(int startSuffixIndex, int endSuffixIndex, boolean onlyForLanguage) {
+    private void setSuffixesOnlyForLanguage(int startSuffixIndexInclusive, int endSuffixIndexExclusive, boolean onlyForLanguage) {
         if (!onlyForLanguage) {
-            Set<Integer> range = IntStream.range(startSuffixIndex, endSuffixIndex + 1).boxed()
+            Set<Integer> range = IntStream.range(startSuffixIndexInclusive, endSuffixIndexExclusive).boxed()
                     .collect(Collectors.toSet());
             classicalSuffixIndices.addAll(range);
         }
