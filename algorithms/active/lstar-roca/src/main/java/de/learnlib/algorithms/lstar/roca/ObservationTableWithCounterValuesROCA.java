@@ -462,7 +462,8 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         }
     }
 
-    private void setSuffixesOnlyForLanguage(int startSuffixIndexInclusive, int endSuffixIndexExclusive, boolean onlyForLanguage) {
+    private void setSuffixesOnlyForLanguage(int startSuffixIndexInclusive, int endSuffixIndexExclusive,
+            boolean onlyForLanguage) {
         if (!onlyForLanguage) {
             Set<Integer> range = IntStream.range(startSuffixIndexInclusive, endSuffixIndexExclusive).boxed()
                     .collect(Collectors.toSet());
@@ -572,6 +573,8 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         if (!initialShortPrefixes.get(0).isEmpty()) {
             throw new IllegalArgumentException("First initial short prefix MUST be the empty word!");
         }
+
+        alphabetSize = alphabet.size();
 
         for (Word<I> suffix : initialSuffixes) {
             if (suffixesSet.add(suffix)) {
@@ -808,6 +811,10 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
                 spRow.setSuccessor(newSymbolIndex, longPrefixRow);
 
                 createTreeNodes(longPrefixRow, suffixes, oracle);
+
+                // We need to re-compute the approximation set for the short row, too, as it may
+                // happen than the new successor belongs in that set
+                sameOutputsToUpdateApprox.add(spRow.getSameOutputsId());
             }
 
             return updateApproxSets();
@@ -830,15 +837,6 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         Set<RowImpl<I>> rowsToUpdate = new HashSet<>();
         for (int sameOutputsId : sameOutputsToUpdateApprox) {
             rowsToUpdate.addAll(sameOutputs.get(sameOutputsId));
-        }
-
-        for (Map.Entry<Integer, Set<RowImpl<I>>> entry : sameOutputs.entrySet()) {
-            for (RowImpl<I> r : entry.getValue()) {
-                for (RowImpl<I> ro : entry.getValue()) {
-                    assert r.getOutputs().equals(ro.getOutputs());
-                    assert r.getSameOutputsId() == ro.getSameOutputsId();
-                }
-            }
         }
 
         Map<Integer, Set<Integer>> newApprox = new HashMap<>();
