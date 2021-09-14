@@ -159,7 +159,7 @@ public class LStarROCATest {
         testLearnROCA(roca, alphabet, learner, rocaEqOracle, mOracle, counterValueOracle);
     }
 
-    @Test(timeOut = 1000)
+    @Test
     public void testLearningRegularLanguage() {
         ExamplePaulAndMary example = ExamplePaulAndMary.createExample();
         Alphabet<Symbol> alphabet = example.getAlphabet();
@@ -169,7 +169,7 @@ public class LStarROCATest {
         launch(roca, alphabet);
     }
 
-    @Test(timeOut = 1000)
+    @Test
     public void testLearningTinyROCA() {
         ExampleTinyROCA example = new ExampleTinyROCA();
         Alphabet<Character> alphabet = example.getAlphabet();
@@ -178,7 +178,7 @@ public class LStarROCATest {
         launch(roca, alphabet);
     }
 
-    @Test(timeOut = 1000)
+    @Test
     public void testLearningRegularROCA() {
         ExampleRegularROCA example = new ExampleRegularROCA();
         launch(example.getReferenceAutomaton(), example.getAlphabet());
