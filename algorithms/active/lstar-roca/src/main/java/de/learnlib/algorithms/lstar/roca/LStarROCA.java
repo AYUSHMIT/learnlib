@@ -19,6 +19,7 @@ import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.datastructure.observationtable.Inconsistency;
 import de.learnlib.datastructure.observationtable.OTLearner;
 import de.learnlib.datastructure.observationtable.Row;
+import de.learnlib.filter.statistic.Counter;
 import de.learnlib.util.MQUtil;
 import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.SupportsGrowingAlphabet;
@@ -53,6 +54,7 @@ public class LStarROCA<I>
 
     public static final String CLOSED_TABLE_PROFILE_KEY = "Making the table closed, Sigma-consistent, and bottom-consistent";
     public static final String COUNTEREXAMPLE_DFA_PROFILE_KEY = "Searching for counterexample DFA";
+    public static final String FINDING_PERIODIC_DESCRIPTIONS = "Computing periodic descriptions";
 
     protected final Alphabet<I> alphabet;
 
@@ -63,6 +65,12 @@ public class LStarROCA<I>
     protected final ObservationTableWithCounterValuesROCA<I> table;
     protected DefaultAutomatonWithCounterValuesROCA<I> hypothesis;
     protected int counterLimit;
+
+    protected Counter numberOfUnclosedRows = new Counter("Resolved unclosed rows", "rows");
+    protected Counter numberOfSigmaInconsistencies = new Counter("Sigma-inconsistencies", "inconsistencies");
+    protected Counter numberOfBottomInconsistencies = new Counter("Bottom-inconsistencies", "inconsistencies");
+    protected Counter numberOfResolvedMismatches = new Counter("Resolved mismatches", "mismatches");
+    protected long lengthLongestCounterexample = 0;
 
     public LStarROCA(MembershipOracle.ROCAMembershipOracle<I> membershipOracle,
             MembershipOracle.CounterValueOracle<I> counterValueOracle,
@@ -93,7 +101,10 @@ public class LStarROCA<I>
             return Collections.singletonList(hypothesis.asAutomaton());
         }
 
-        return hypothesis.toAutomata(counterLimit);
+        SimpleProfiler.start(FINDING_PERIODIC_DESCRIPTIONS);
+        List<ROCA<?, I>> rocas = hypothesis.toAutomata(counterLimit);
+        SimpleProfiler.stop(FINDING_PERIODIC_DESCRIPTIONS);
+        return rocas;
     }
 
     @Override
@@ -105,6 +116,7 @@ public class LStarROCA<I>
 
     @Override
     public boolean refineHypothesis(DefaultQuery<I, Boolean> ceQuery) {
+        lengthLongestCounterexample = Math.max(lengthLongestCounterexample, ceQuery.getInput().length());
         // 1. We compute the new counter limit
         List<DefaultQuery<I, Integer>> counterValueQueries = new ArrayList<>(ceQuery.getInput().length());
         for (Word<I> prefix : ceQuery.getInput().prefixes(false)) {
@@ -167,6 +179,7 @@ public class LStarROCA<I>
                 return;
             }
             assert MQUtil.isCounterexample(ce, hypothesis);
+            lengthLongestCounterexample = Math.max(lengthLongestCounterexample, ce.getInput().length());
 
             int oldDistinctRows = table.numberOfDistinctRows();
             int oldSuffixes = table.numberOfSuffixes();
@@ -191,6 +204,26 @@ public class LStarROCA<I>
         return hypothesis.accepts(word) != output;
     }
 
+    public long numberOfRowsUsedToCloseTable() {
+        return numberOfUnclosedRows.getCount();
+    }
+
+    public long numberOfSigmaInconsistencies() {
+        return numberOfSigmaInconsistencies.getCount();
+    }
+
+    public long numberOfBottomInconsistencies() {
+        return numberOfBottomInconsistencies.getCount();
+    }
+
+    public long numberOfResolvedMismatches() {
+        return numberOfResolvedMismatches.getCount();
+    }
+
+    public long getLengthOfTheLongestCounterexample() {
+        return lengthLongestCounterexample;
+    }
+
     protected List<Word<I>> initialSuffixes() {
         return Collections.singletonList(Word.epsilon());
     }
@@ -209,6 +242,7 @@ public class LStarROCA<I>
                     return false;
                 }
                 List<Row<I>> closingRows = selectClosingRows(unclosedIter);
+                numberOfUnclosedRows.increment(closingRows.size());
                 unclosedIter = table.toShortPrefixes(closingRows, membershipOracle);
                 refined = true;
             }
@@ -226,6 +260,7 @@ public class LStarROCA<I>
                     }
                     sigmaInconsistency = table.findSigmaInconsistency();
                     if (sigmaInconsistency != null) {
+                        numberOfSigmaInconsistencies.increment();
                         Set<Word<I>> newSuffix = analyzeSigmaInconsistency(sigmaInconsistency);
                         unclosedIter = table.addSuffixes(newSuffix, membershipOracle);
                     }
@@ -245,8 +280,10 @@ public class LStarROCA<I>
                         }
                         bottomInconsistency = table.findBottomInconsistency();
                         if (bottomInconsistency != null) {
+                            numberOfBottomInconsistencies.increment();
                             Pair<Boolean, Word<I>> analysis = analyzeBottomInconsistency(bottomInconsistency);
                             if (analysis.getFirst()) {
+                                numberOfResolvedMismatches.increment();
                                 unclosedIter = table.addSuffixesOnlyForLanguage(analysis.getSecond().suffixes(false),
                                         membershipOracle);
                             } else {
