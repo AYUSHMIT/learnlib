@@ -185,9 +185,7 @@ public class LStarROCA<I>
             int oldSuffixes = table.numberOfSuffixes();
 
             List<List<Row<I>>> unclosed = table.addShortPrefixes(ce.getInput().prefixes(false), membershipOracle);
-            SimpleProfiler.start(CLOSED_TABLE_PROFILE_KEY);
             completeConsistentTable(unclosed, true);
-            SimpleProfiler.stop(CLOSED_TABLE_PROFILE_KEY);
 
             assert table.numberOfDistinctRows() > oldDistinctRows || table.numberOfSuffixes() > oldSuffixes
                     : "Nothing was learnt during the last iteration for DFA";
@@ -229,6 +227,7 @@ public class LStarROCA<I>
     }
 
     protected boolean completeConsistentTable(List<List<Row<I>>> unclosed, boolean checkConsistency) {
+        SimpleProfiler.start(CLOSED_TABLE_PROFILE_KEY);
         boolean refined = false;
         List<List<Row<I>>> unclosedIter = unclosed;
         do {
@@ -296,6 +295,7 @@ public class LStarROCA<I>
             }
         } while (!unclosedIter.isEmpty());
 
+        SimpleProfiler.stop(CLOSED_TABLE_PROFILE_KEY);
         return refined;
     }
 
