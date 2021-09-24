@@ -25,6 +25,11 @@ import net.automatalib.visualization.Visualization;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.impl.Alphabets;
 
+/**
+ * Example of using {@link LStarROCA} to learn a simple ROCA.
+ * 
+ * @author Gaëtan Staquet
+ */
 public class ROCAExample {
     private ROCAExample() {
     }

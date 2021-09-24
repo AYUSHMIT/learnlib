@@ -35,17 +35,30 @@ import net.automatalib.words.impl.Alphabets;
 /**
  * A learner based on L* for ROCAs.
  * 
- * More precisely, the learner learns a DFA accepting a sub-language of the
- * target language up to a certain counter limit. This sub-language is called
- * the restricted language (and a DFA accepting that language is called a
- * restricted automaton, see {@link AutomatonWithCounterValues}). On top of
- * that, the learner associates possible counter values to each row. Once the
- * restricted automaton is correctly learnt and the counter values computed, the
- * learner proceeds to construct every possible ROCA using that automaton and
- * the values.
+ * The learner first learns a DFA accepting a sub-language of the target
+ * language up to a certain counter limit. This sub-language is called the
+ * restricted language (and a DFA accepting that language is called a restricted
+ * automaton, see {@link AutomatonWithCounterValues}). On top of that, the
+ * learner associates possible counter values to each cell in the table. Once
+ * the restricted automaton is correctly learned alongside the counter values,
+ * the learner proceeds to construct every possible ROCA using that automaton
+ * and the values.
+ * 
+ * Each time a counterexample is processed after asking equivalence queries over
+ * the ROCAs, the counter limit is increased. This means that the restricted
+ * language is modified to accept more words. In turn, this implies that the DFA
+ * must be re-learned. However, we can keep the information learned before. That
+ * is, we only need to identify the classes in the new part of the restricted
+ * language.
  * 
  * Note that this means that the learner can yield multiple hypotheses by
  * learning round.
+ * 
+ * For more details on the data structure, see
+ * {@link ObservationTableWithCounterValuesROCA}.
+ * 
+ * The implementation assumes the target ROCA accepts by final location and
+ * counter value equal to zero.
  * 
  * @author Gaëtan Staquet
  */
@@ -110,8 +123,8 @@ public class LStarROCA<I>
     @Override
     public void startLearning() {
         // During the first round, we only want to test if the language is empty
-        // Since the hypothesis is initialized as an ROCA accepting nothing, we do not
-        // have to do anything
+        // Since the hypothesis is initialized as an ROCA accepting nothing, we have
+        // nothing to do
     }
 
     @Override
@@ -188,7 +201,7 @@ public class LStarROCA<I>
             completeConsistentTable(unclosed, true);
 
             assert table.numberOfDistinctRows() > oldDistinctRows || table.numberOfSuffixes() > oldSuffixes
-                    : "Nothing was learnt during the last iteration for DFA";
+                    : "Nothing was learned during the last iteration for DFA";
         }
     }
 
@@ -214,7 +227,7 @@ public class LStarROCA<I>
         return numberOfBottomInconsistencies.getCount();
     }
 
-    public long numberOfResolvedMismatches() {
+    public long numberOfBottomInconsistenciesResolvedByAddingOnlyForLanguageSuffixes() {
         return numberOfResolvedMismatches.getCount();
     }
 
@@ -410,7 +423,7 @@ public class LStarROCA<I>
     }
 
     @Override
-    public ROCA<?, I> getLearntDFAAsROCA() {
+    public ROCA<?, I> getlearnedDFAAsROCA() {
         return hypothesis.asAutomaton();
     }
 

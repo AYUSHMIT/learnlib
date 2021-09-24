@@ -8,7 +8,7 @@ import net.automatalib.words.Alphabet;
 import net.automatalib.words.impl.Alphabets;
 
 /**
- * An ROCA accepting {a^n b^n | n >= 0}.
+ * An ROCA accepting {@code {a^n b^n | n >= 0}}.
  * 
  * @author Gaëtan Staquet
  */

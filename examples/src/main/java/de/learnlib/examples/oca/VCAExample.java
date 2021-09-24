@@ -8,12 +8,12 @@ import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.SingleQueryOracle;
 import de.learnlib.datastructure.observationtable.OTUtils;
 import de.learnlib.datastructure.observationtable.writer.StratifiedObservationTableASCIIWriter;
+import de.learnlib.filter.statistic.oracle.ROCACounterOracle;
 import de.learnlib.filter.statistic.oracle.VCACounterEQOracle;
 import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonCounterEQOracle;
 import de.learnlib.oracle.equivalence.vca.RestrictedAutomatonVCASimulatorEQOracle;
 import de.learnlib.oracle.equivalence.vca.VCASimulatorEQOracle;
-import de.learnlib.oracle.membership.roca.RestrictedAutomatonCounterOracle;
-import de.learnlib.oracle.membership.vca.RestrictedAutomatonVCASimulatorOracle;
+import de.learnlib.oracle.membership.SimulatorOracle.ROCASimulatorOracle;
 import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.automata.oca.DefaultVCA;
 import net.automatalib.automata.oca.VCA;
@@ -25,7 +25,7 @@ import net.automatalib.words.impl.Alphabets;
 import net.automatalib.words.impl.DefaultVPDAlphabet;
 
 /**
- * An example learning a VCA using L*
+ * An example learning a VCA using {@link LStarVCA}.
  * 
  * @author Gaëtan Staquet
  */
@@ -62,10 +62,8 @@ public class VCAExample {
     }
 
     private static <I> void runExample(VCA<?, I> target, VPDAlphabet<I> alphabet) throws IOException {
-        SingleQueryOracle.SingleQueryOracleRestrictedAutomaton<I> sul = new RestrictedAutomatonVCASimulatorOracle<>(
-                target);
-        RestrictedAutomatonCounterOracle<I> membershipOracle = new RestrictedAutomatonCounterOracle<>(sul,
-                "membership queries");
+        SingleQueryOracle.SingleQueryOracleROCA<I> sul = new ROCASimulatorOracle<>(target);
+        ROCACounterOracle<I> membershipOracle = new ROCACounterOracle<>(sul, "membership queries");
 
         EquivalenceOracle.VCAEquivalenceOracle<I> eqOracle = new VCASimulatorEQOracle<>(target);
         VCACounterEQOracle<I> equivalenceOracle = new VCACounterEQOracle<>(eqOracle, "equivalence queries");

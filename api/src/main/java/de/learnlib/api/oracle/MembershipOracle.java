@@ -99,16 +99,6 @@ public interface MembershipOracle<I, D> extends QueryAnswerer<I, D>, BatchProces
     interface MealyMembershipOracle<I, O> extends MembershipOracle<I, Word<O>> {}
 
     /**
-     * A specialization of the {@link MembershipOracle} for oracles that work with a counter limit.
-     * 
-     * @param <I>
-     *         input symbol type
-     */
-    interface RestrictedAutomatonMembershipOracle<I> extends MembershipOracle<I, Boolean> {
-        public void setCounterLimit(int counterLimit);
-    }
-
-    /**
      * A specialization of the {@link MembershipOracle} interface for membership oracles working over an ROCA.
      * 
      * @param <I>

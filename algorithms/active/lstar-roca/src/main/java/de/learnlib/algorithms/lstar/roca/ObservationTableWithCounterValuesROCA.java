@@ -45,6 +45,7 @@ import net.automatalib.words.impl.Alphabets;
  * <li>Two sets of suffixes (the columns). The first is simply called the set of
  * suffixes (noted S), while the second is called the set of "only for language
  * suffixes".</li>
+ * </ul>
  * 
  * The idea is that the counter values of the "only for language" columns are
  * not needed. That is, the "only for language" columns are present only to have
@@ -52,10 +53,11 @@ import net.automatalib.words.impl.Alphabets;
  * guaranteed that the set of suffixes is included in the set of "only for
  * language" suffixes.
  * 
- * The learnt knowledge is actually stored in a prefix tree. The cells in the
+ * The learned knowledge is actually stored in a prefix tree. The cells in the
  * table are references to nodes in the tree. This implies the learner stores
  * more information than is actually used. Storing more information allows us to
- * reduce the number of queries.
+ * reduce the number of queries and reduce the overall time complexity (at the
+ * cost of a higher memory consumption).
  * 
  * We can not use the equivalence relation naturally induced by the table (i.e.,
  * the classical relation used in L*) as this may render the learning process
@@ -70,15 +72,15 @@ import net.automatalib.words.impl.Alphabets;
  * between Approx and the set of short prefix rows, is Sigma consistent (or just
  * consistent) if, for all short prefix row r, the intersection of all
  * Approx(ua) (with u a short prefix row in Approx(r) and a a symbol in the
- * alphabet) is not empty, and is bottom consistent if .for every pair of rows
+ * alphabet) is not empty, and is bottom consistent if for every pair of rows
  * and every column, the counter values are both UNKNOWN_COUNTER_VALUE or both
  * naturals.
  * 
  * Once the table is closed, Sigma consistent, and bottom consistent, the Approx
- * sets define an right congruence equivalence relation.
+ * sets define a right congruence equivalence relation.
  * 
  * Remark: the implementation assumes the target ROCA accepts by final state and
- * counter value equal to zero, i.e., {@link AcceptanceMode.BOTH}.
+ * counter value equal to zero, i.e., {@link AcceptanceMode#BOTH}.
  * 
  * @param <I> Input alphabet type
  * @author Gaëtan Staquet
@@ -144,6 +146,9 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
      * 
      * The returned table can be used to nicely display its contents (see
      * {@link OTUtils}).
+     * 
+     * A -2 as a counter value indicates that the suffix is a "only for language"
+     * suffix.
      * 
      * @return
      */
@@ -431,9 +436,24 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         return null;
     }
 
+    /**
+     * Gets a witness that the cell for provided row and column is in the prefix of
+     * the table.
+     * 
+     * The witness w is such that the {@code L_l(u) = 1}. If the cell is not in the
+     * prefix, a {@link IllegalArgumentException} is thrown.
+     * 
+     * @param row         The row
+     * @param suffixIndex The index of the column
+     * @return An {@link ObservationTreeNode} that is the witness.
+     */
     public ObservationTreeNode<I> getWitnessInPrefix(Row<I> row, int suffixIndex) {
         RowImpl<I> r = allRows.get(row.getRowId());
         ObservationTreeNode<I> node = r.getNode().getPrefix(getSuffix(suffixIndex), 0);
+        if (node.getCounterValue() == UNKNOWN_COUNTER_VALUE) {
+            throw new IllegalArgumentException(
+                    "The provided row and suffixIndex are not in the prefix of the table " + row + " " + suffixIndex);
+        }
         // BFS
         Queue<ObservationTreeNode<I>> toExplore = new LinkedList<>();
         toExplore.add(node);
@@ -920,7 +940,7 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
         // 1. row and v have exactly the same boolean outputs
         // 2. For every separator s, (the counter value of (v s) !=
         // UNKNOWN_COUNTER_VALUE AND the counter value of (u s) !=
-        // UNKNOWN_COUNTER_VALUE) implies that the counter values are equal
+        // UNKNOWN_COUNTER_VALUE) implies that the counter values are equal.
         // Here, an approx set contains the ids of the rows
         // Note that sameOutputs is constructed such that 1. is satisfied
 
@@ -981,7 +1001,7 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
     private RowImpl<I> createSpRow(Word<I> prefix) {
         ObservationTreeNode<I> node = observationTreeRoot.getPrefix(prefix, 0);
-        RowImpl<I> row = new RowImpl<>(numRows++, node, this, alphabet.size());
+        RowImpl<I> row = new RowImpl<>(numRows++, prefix, node, this, alphabet.size());
         allRows.add(row);
         rowMap.put(prefix, row);
         shortPrefixRows.add(row);
@@ -990,7 +1010,7 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
     private RowImpl<I> createLpRow(Word<I> prefix) {
         ObservationTreeNode<I> node = observationTreeRoot.getPrefix(prefix, 0);
-        RowImpl<I> row = new RowImpl<>(numRows++, node, this);
+        RowImpl<I> row = new RowImpl<>(numRows++, prefix, node, this);
         allRows.add(row);
         rowMap.put(prefix, row);
         int idx = longPrefixRows.size();

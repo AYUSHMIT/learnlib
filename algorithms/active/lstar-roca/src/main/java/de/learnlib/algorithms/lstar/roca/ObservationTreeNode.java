@@ -18,13 +18,14 @@ import net.automatalib.words.Word;
 import net.automatalib.words.WordBuilder;
 
 /**
- * A node in a prefix tree used by {@link ObservationTableWithCounterValuesROCA}
- * to actually store the observations.
+ * A node in a prefix tree used by an
+ * {@link ObservationTableWithCounterValuesROCA} to actually store the
+ * observations.
  * 
  * This implementation assumes the target ROCA accepts by final state and
  * counter value equal to zero.
  * 
- * A node stores four elements:
+ * A node stores five elements:
  * <ul>
  * <li>The answers to the membership and counter value queries, noted L(w) and
  * C(w).</li>
@@ -32,6 +33,8 @@ import net.automatalib.words.WordBuilder;
  * <li>Whether the node is actually used in the table. Since the tree is closed
  * by prefix, there are nodes that are not actually used by the learner's
  * table.</li>
+ * <li>Whether one of the ancestors of this node is known to be outside the
+ * counter limit.</li>
  * </ul>
  * 
  * Note that the learner does not immediately access to the stored information.
@@ -141,7 +144,8 @@ class ObservationTreeNode<I> {
         }
 
         ObservationTreeNode<?> o = (ObservationTreeNode<?>) obj;
-        return Objects.equals(o.getPrefix(), this.getPrefix()) && Objects.equals(o.output, this.output) && Objects.equals(o.counterValue, this.counterValue);
+        return Objects.equals(o.getPrefix(), this.getPrefix()) && Objects.equals(o.output, this.output)
+                && Objects.equals(o.counterValue, this.counterValue);
     }
 
     private void setSuccessor(I symbol, ObservationTreeNode<I> successor) {

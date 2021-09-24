@@ -47,7 +47,7 @@ public class LStarVCA<I>
 
     private final VPDAlphabet<I> alphabet;
 
-    private final MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle;
+    private final MembershipOracle.ROCAMembershipOracle<I> membershipOracle;
     private final EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> restrictedAutomatonEquivalenceOracle;
 
     private final StratifiedObservationTableWithCounterValues<I, Boolean> table;
@@ -55,7 +55,7 @@ public class LStarVCA<I>
     private DefaultAutomatonWithCounterValuesVCA<I> hypothesis;
     private int counterLimit;
 
-    public LStarVCA(MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle,
+    public LStarVCA(MembershipOracle.ROCAMembershipOracle<I> membershipOracle,
             EquivalenceOracle.RestrictedAutomatonEquivalenceOracle<I> restrictedAutomatonEquivalenceOracle,
             VPDAlphabet<I> alphabet) {
         this.membershipOracle = membershipOracle;
@@ -72,7 +72,7 @@ public class LStarVCA<I>
     }
 
     @Override
-    public VCA<?, I> getLearntDFAAsVCA() {
+    public VCA<?, I> getlearnedDFAAsVCA() {
         return hypothesis.asAutomaton();
     }
 
@@ -132,7 +132,6 @@ public class LStarVCA<I>
         counterLimit = OCAUtil.computeMaximalCounterValue(ceQuery.getInput(), alphabet);
 
         // 2. We increase the counter limit in the oracles
-        membershipOracle.setCounterLimit(counterLimit);
         restrictedAutomatonEquivalenceOracle.setCounterLimit(counterLimit);
 
         // 3. We refine the table
@@ -228,7 +227,7 @@ public class LStarVCA<I>
             List<List<Row<I>>> unclosed = table.addShortPrefixes(ce.getInput().prefixes(false), membershipOracle);
             completeConsistentTable(unclosed, true);
             assert table.numberOfDistinctRows() > oldDistinctRows
-                    : "Nothing was learnt during the last iteration for DFA";
+                    : "Nothing was learned during the last iteration for DFA";
         }
     }
 

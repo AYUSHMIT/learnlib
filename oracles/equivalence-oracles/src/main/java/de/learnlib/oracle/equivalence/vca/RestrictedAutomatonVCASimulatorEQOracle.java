@@ -15,7 +15,7 @@ import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
 
 /**
- * An equivalence oracle for a DFA learnt from a restricted automaton
+ * An equivalence oracle for a DFA learned from a restricted automaton
  * constructed from a VCA.
  * 
  * Since such an automaton is constructed from a VCA for a given maximal counter

@@ -14,6 +14,7 @@ import net.automatalib.words.Word;
 /**
  * An equivalence oracle, which checks hypothesis automata against an ROCA.
  * 
+ * @param <I> Input alphabet type
  * @author Gaëtan Staquet
  */
 public final class ROCASimulatorEQOracle<I> implements EquivalenceOracle.ROCAEquivalenceOracle<I> {
@@ -39,5 +40,5 @@ public final class ROCASimulatorEQOracle<I> implements EquivalenceOracle.ROCAEqu
         }
         return new DefaultQuery<>(separator, reference.accepts(separator));
     }
-    
+
 }

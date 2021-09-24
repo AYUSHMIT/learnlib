@@ -11,8 +11,7 @@ import de.learnlib.util.statistics.SimpleProfiler;
  * An experiment takes a learning algorithm and equivalence oracle(s) and
  * produces a model satisfying the oracle(s).
  * 
- * See {@link Experiment}, {@link ROCAExperiment}, and {@link VCAExperiment} for
- * concrete implementations.
+ * See {@link Experiment} for a possible concrete implementation.
  * 
  * @param <A> The type of the model to learn
  * @author Gaëtan Staquet
@@ -45,7 +44,7 @@ public abstract class AbstractExperiment<A extends Object> {
      * Actually run the learner. It is guaranteed that the learning algorithm has
      * not yet been ran.
      * 
-     * @return The learnt model
+     * @return The learned model
      */
     protected abstract A runInternal();
 

@@ -46,12 +46,12 @@ public interface MultipleHypothesesLearningAlgorithm<M, I, D> extends LearningAl
      */
     interface ROCALearner<I> extends MultipleHypothesesLearningAlgorithm<ROCA<?, I>, I, Boolean> {
         /**
-         * Gets the learnt DFA (the restricted automaton up to a counter value) as an
+         * Gets the learned DFA (the restricted automaton up to a counter value) as an
          * ROCA.
          * 
-         * @return An ROCA constructed from the learnt DFA
+         * @return An ROCA constructed from the learned DFA
          */
-        ROCA<?, I> getLearntDFAAsROCA();
+        ROCA<?, I> getlearnedDFAAsROCA();
 
         @Override
         Collection<ROCA<?, I>> getHypothesisModels();
@@ -60,7 +60,8 @@ public interface MultipleHypothesesLearningAlgorithm<M, I, D> extends LearningAl
 
         /**
          * Determines whether the given word is a counterexample.
-         * @param word The word
+         * 
+         * @param word   The word
          * @param output Whether the word should be accepted or rejected
          * @return True iff word is a counterexample
          */
@@ -74,12 +75,12 @@ public interface MultipleHypothesesLearningAlgorithm<M, I, D> extends LearningAl
      */
     interface VCALearner<I> extends MultipleHypothesesLearningAlgorithm<VCA<?, I>, I, Boolean> {
         /**
-         * Gets the learnt DFA (the restricted automaton up to a counter value) as a
+         * Gets the learned DFA (the restricted automaton up to a counter value) as a
          * VCA.
          * 
-         * @return A VCA constructed from the learnt DFA
+         * @return A VCA constructed from the learned DFA
          */
-        VCA<?, I> getLearntDFAAsVCA();
+        VCA<?, I> getlearnedDFAAsVCA();
 
         int getCounterLimit();
     }

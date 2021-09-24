@@ -9,12 +9,11 @@ import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.EquivalenceOracle.RestrictedAutomatonEquivalenceOracle;
 import de.learnlib.api.oracle.EquivalenceOracle.VCAEquivalenceOracle;
 import de.learnlib.api.oracle.MembershipOracle;
-import de.learnlib.api.oracle.MembershipOracle.RestrictedAutomatonMembershipOracle;
 import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.examples.vca.ExampleRandomVCA;
 import de.learnlib.oracle.equivalence.vca.RestrictedAutomatonVCASimulatorEQOracle;
 import de.learnlib.oracle.equivalence.vca.VCASimulatorEQOracle;
-import de.learnlib.oracle.membership.vca.RestrictedAutomatonVCASimulatorOracle;
+import de.learnlib.oracle.membership.SimulatorOracle.ROCASimulatorOracle;
 import net.automatalib.automata.oca.VCA;
 import net.automatalib.util.automata.oca.OCAUtil;
 import net.automatalib.words.VPDAlphabet;
@@ -23,7 +22,7 @@ import net.automatalib.words.impl.DefaultVPDAlphabet;
 
 public class LStarVCATests {
     private static <I> void runTest(VCA<?, I> target, VPDAlphabet<I> alphabet) {
-        RestrictedAutomatonMembershipOracle<I> mOracle = new RestrictedAutomatonVCASimulatorOracle<>(target);
+        ROCASimulatorOracle<I> mOracle = new ROCASimulatorOracle<>(target);
         VCAEquivalenceOracle<I> vcaEqOracle = new VCASimulatorEQOracle<>(target);
         RestrictedAutomatonEquivalenceOracle<I> restrictedEqOracle = new RestrictedAutomatonVCASimulatorEQOracle<>(
                 target, alphabet);
@@ -32,13 +31,13 @@ public class LStarVCATests {
 
         int maxRounds = (int) Math.pow(target.size(), 4);
 
-        VCA<?, I> learnt = learn(target, alphabet, learner, vcaEqOracle, mOracle, maxRounds);
-        Assert.assertTrue(OCAUtil.testEquivalence(target, learnt, alphabet));
+        VCA<?, I> learned = learn(target, alphabet, learner, vcaEqOracle, mOracle, maxRounds);
+        Assert.assertTrue(OCAUtil.testEquivalence(target, learned, alphabet));
     }
 
     private static <I> VCA<?, I> learn(VCA<?, I> target, VPDAlphabet<I> alphabet, LStarVCA<I> learner,
             EquivalenceOracle.VCAEquivalenceOracle<I> eqOracle,
-            MembershipOracle.RestrictedAutomatonMembershipOracle<I> membershipOracle, int maxRounds) {
+            MembershipOracle.ROCAMembershipOracle<I> membershipOracle, int maxRounds) {
         learner.startLearning();
 
         while (maxRounds-- > 0) {
@@ -61,7 +60,7 @@ public class LStarVCATests {
             }
 
             if (counterexample == null) {
-                VCA<?, I> hypothesis = learner.getLearntDFAAsVCA();
+                VCA<?, I> hypothesis = learner.getlearnedDFAAsVCA();
                 counterexample = eqOracle.findCounterExample(hypothesis, alphabet);
                 if (counterexample == null) {
                     return hypothesis;

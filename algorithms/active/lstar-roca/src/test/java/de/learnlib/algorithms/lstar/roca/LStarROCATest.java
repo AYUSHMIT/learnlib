@@ -32,15 +32,18 @@ import net.automatalib.words.Alphabet;
 import net.automatalib.words.impl.Alphabets;
 import net.automatalib.words.impl.Symbol;
 
+/**
+ * @author Gaëtan Staquet
+ */
 public class LStarROCATest {
     private static <I> void testLearnROCA(ROCA<?, I> target, Alphabet<I> alphabet, LStarROCA<I> learner,
             EquivalenceOracle.ROCAEquivalenceOracle<I> eqOracle,
             MembershipOracle.ROCAMembershipOracle<I> membershipOracle,
             MembershipOracle.CounterValueOracle<I> counterValueOracle) {
         int maxRounds = (int) Math.pow(target.size(), 4);
-        ROCA<?, I> learnt = run(target, alphabet, learner, eqOracle, membershipOracle, counterValueOracle, maxRounds);
-        Assert.assertNotNull(learnt);
-        Assert.assertTrue(OCAUtil.testEquivalence(target, learnt, alphabet));
+        ROCA<?, I> learned = run(target, alphabet, learner, eqOracle, membershipOracle, counterValueOracle, maxRounds);
+        Assert.assertNotNull(learned);
+        Assert.assertTrue(OCAUtil.testEquivalence(target, learned, alphabet));
 
         ObservationTableWithCounterValuesROCA<I> table = learner.getObservationTable();
         checkPrefixTable(table);
@@ -69,7 +72,7 @@ public class LStarROCATest {
             }
 
             if (counterexample == null) {
-                ROCA<?, I> hypothesis = learner.getLearntDFAAsROCA();
+                ROCA<?, I> hypothesis = learner.getlearnedDFAAsROCA();
                 counterexample = eqOracle.findCounterExample(hypothesis, alphabet);
                 if (counterexample == null) {
                     return hypothesis;

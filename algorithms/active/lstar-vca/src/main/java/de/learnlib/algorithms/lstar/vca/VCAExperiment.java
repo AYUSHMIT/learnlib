@@ -75,19 +75,19 @@ public class VCAExperiment<I> extends AbstractExperiment<VCA<?, I>> {
             }
 
             if (counterexample == null) {
-                // If there was no VCAs in the previous loop, we directly take the learnt DFA
+                // If there was no VCAs in the previous loop, we directly take the learned DFA
                 // as an VCA.
-                // Note that we are sure the learnt restricted automaton is not big enough to
+                // Note that we are sure the learned restricted automaton is not big enough to
                 // contain the periodic part of the behavior graph.
                 // Also, we are sure the counterexample is a useful one as the DFA is correct on
                 // the restricted language.
                 // There is however an exception to the last point: if the target language is
                 // regular.
                 // In that case, it is not guaranteed that an hypothesis could be created above.
-                // Thus, we end up here and use the learnt DFA as an VCA.
+                // Thus, we end up here and use the learned DFA as an VCA.
                 // Since the language is regular, the DFA accepts the correct language, and so
                 // does the VCA.
-                VCA<?, I> hypothesis = learningAlgorithm.getLearntDFAAsVCA();
+                VCA<?, I> hypothesis = learningAlgorithm.getlearnedDFAAsVCA();
                 profileStart(COUNTEREXAMPLE_PROFILE_KEY);
                 counterexample = equivalenceOracle.findCounterExample(hypothesis, alphabet);
                 profileStop(COUNTEREXAMPLE_PROFILE_KEY);

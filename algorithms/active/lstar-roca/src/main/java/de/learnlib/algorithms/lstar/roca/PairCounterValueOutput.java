@@ -4,7 +4,7 @@ import java.util.Objects;
 
 /**
  * A pair (output, counter value) to be used in an
- * {@link AbstractObservationTableWithCounterValues}.
+ * {@link ObservationTableWithCounterValuesROCA}.
  * 
  * Two pairs are equals iff they have exactly the same contents.
  * 
@@ -24,7 +24,7 @@ public class PairCounterValueOutput<D> {
     public D getOutput() {
         return output;
     }
-    
+
     public void setOutput(D output) {
         this.output = output;
     }
