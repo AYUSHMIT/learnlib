@@ -18,10 +18,10 @@ package de.learnlib.filter.cache.dfa;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.Set;
 
 import de.learnlib.api.Resumable;
 import de.learnlib.api.oracle.EquivalenceOracle;
@@ -32,51 +32,65 @@ import de.learnlib.filter.cache.dfa.DFAHashCacheOracle.DFAHashCacheOracleState;
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.words.Word;
 
+/**
+ * A {@link DFALearningCacheOracle} that uses a {@link Map} for internal cache organization.
+ * <p>
+ * <b>Note:</b> this implementation is <b>not</b> thread-safe. If you require a cache that is usable in a parallel
+ * environment. consider using the alternatives offered by the {@code ThreadSafeDFACaches} factory from the {@code
+ * learnlib-parallelism} artifact.
+ *
+ * @param <I>
+ *         input symbol type
+ */
 public class DFAHashCacheOracle<I> implements DFALearningCacheOracle<I>, Resumable<DFAHashCacheOracleState<I>> {
 
     private final MembershipOracle<I, Boolean> delegate;
     private Map<Word<I>, Boolean> cache;
-    private final Lock cacheLock;
 
-    public DFAHashCacheOracle(MembershipOracle<I, Boolean> delegate) {
+    DFAHashCacheOracle(MembershipOracle<I, Boolean> delegate) {
+        this(delegate, new HashMap<>());
+    }
+
+    DFAHashCacheOracle(MembershipOracle<I, Boolean> delegate, Map<Word<I>, Boolean> cache) {
         this.delegate = delegate;
-        this.cache = new HashMap<>();
-        this.cacheLock = new ReentrantLock();
+        this.cache = cache;
     }
 
     @Override
     public EquivalenceOracle<DFA<?, I>, I, Boolean> createCacheConsistencyTest() {
-        return new DFAHashCacheConsistencyTest<>(cache, cacheLock);
+        return new DFAHashCacheConsistencyTest<>(cache);
     }
 
     @Override
     public void processQueries(Collection<? extends Query<I, Boolean>> queries) {
-        List<ProxyQuery<I>> misses = new ArrayList<>();
+        final List<ProxyQuery<I>> misses = new ArrayList<>();
+        final List<Query<I, Boolean>> duplicates = new ArrayList<>();
+        final Set<Word<I>> batchCache = new HashSet<>();
 
-        cacheLock.lock();
-        try {
-            for (Query<I, Boolean> qry : queries) {
-                Word<I> input = qry.getInput();
-                Boolean answer = cache.get(input);
-                if (answer != null) {
-                    qry.answer(answer);
-                } else {
+        for (Query<I, Boolean> qry : queries) {
+            final Word<I> input = qry.getInput();
+            final Boolean answer = cache.get(input);
+            if (answer != null) {
+                qry.answer(answer);
+            } else {
+                if (batchCache.add(input)) { // never seen before
                     misses.add(new ProxyQuery<>(qry));
+                } else {
+                    duplicates.add(qry);
                 }
             }
-        } finally {
-            cacheLock.unlock();
         }
 
         delegate.processQueries(misses);
 
-        cacheLock.lock();
-        try {
-            for (ProxyQuery<I> miss : misses) {
-                cache.put(miss.getInput(), miss.getAnswer());
+        for (ProxyQuery<I> miss : misses) {
+            cache.put(miss.getInput(), miss.getAnswer());
+        }
+
+        if (!duplicates.isEmpty()) {
+            for (Query<I, Boolean> d : duplicates) {
+                d.answer(cache.get(d.getInput()));
             }
-        } finally {
-            cacheLock.unlock();
         }
     }
 

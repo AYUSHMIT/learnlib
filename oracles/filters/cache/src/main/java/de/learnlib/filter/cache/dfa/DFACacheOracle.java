@@ -17,23 +17,21 @@ package de.learnlib.filter.cache.dfa;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.Set;
 
 import de.learnlib.api.Resumable;
+import de.learnlib.api.oracle.EquivalenceOracle.DFAEquivalenceOracle;
 import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.query.Query;
 import de.learnlib.filter.cache.LearningCacheOracle.DFALearningCacheOracle;
 import de.learnlib.filter.cache.dfa.DFACacheOracle.DFACacheOracleState;
 import net.automatalib.SupportsGrowingAlphabet;
+import net.automatalib.commons.util.Pair;
 import net.automatalib.incremental.dfa.Acceptance;
 import net.automatalib.incremental.dfa.IncrementalDFABuilder;
-import net.automatalib.incremental.dfa.dag.IncrementalDFADAGBuilder;
-import net.automatalib.incremental.dfa.dag.IncrementalPCDFADAGBuilder;
-import net.automatalib.incremental.dfa.tree.IncrementalDFATreeBuilder;
-import net.automatalib.incremental.dfa.tree.IncrementalPCDFATreeBuilder;
-import net.automatalib.words.Alphabet;
+import net.automatalib.words.Word;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,6 +40,10 @@ import org.slf4j.LoggerFactory;
  * oracle. Queries that can be answered from the cache are answered directly, others are forwarded to the delegate
  * oracle. When the delegate oracle has finished processing these remaining queries, the results are incorporated into
  * the cache.
+ * <p>
+ * <b>Note:</b> this implementation is <b>not</b> thread-safe. If you require a cache that is usable in a parallel
+ * environment. use the {@code ThreadSafeDFACacheOracle} (or rather the {@code ThreadSafeDFACaches} factory) from the
+ * {@code learnlib-parallelism} artifact.
  *
  * @param <I>
  *         input symbol class
@@ -54,130 +56,33 @@ public class DFACacheOracle<I>
     private static final Logger LOGGER = LoggerFactory.getLogger(DFACacheOracle.class);
 
     private IncrementalDFABuilder<I> incDfa;
-    private final ReadWriteLock incDfaLock;
     private final MembershipOracle<I, Boolean> delegate;
 
     DFACacheOracle(IncrementalDFABuilder<I> incDfa, MembershipOracle<I, Boolean> delegate) {
         this.incDfa = incDfa;
-        this.incDfaLock = new ReentrantReadWriteLock();
         this.delegate = delegate;
     }
 
-    /**
-     * Creates a cache oracle for a DFA learning setup, using a tree for internal cache organization.
-     *
-     * @param alphabet
-     *         the alphabet containing the symbols of possible queries
-     * @param delegate
-     *         the oracle to delegate queries to, in case of a cache-miss.
-     * @param <I>
-     *         input symbol type
-     *
-     * @return the cached {@link DFACacheOracle}.
-     *
-     * @see IncrementalDFATreeBuilder
-     */
-    public static <I> DFACacheOracle<I> createTreeCacheOracle(Alphabet<I> alphabet,
-                                                              MembershipOracle<I, Boolean> delegate) {
-        return new DFACacheOracle<>(new IncrementalDFATreeBuilder<>(alphabet), delegate);
-    }
-
-    /**
-     * Creates a prefix-closed cache oracle for a DFA learning setup, using a tree for internal cache organization.
-     *
-     * @param alphabet
-     *         the alphabet containing the symbols of possible queries
-     * @param delegate
-     *         the oracle to delegate queries to, in case of a cache-miss.
-     * @param <I>
-     *         input symbol type
-     *
-     * @return the cached {@link DFACacheOracle}.
-     *
-     * @see IncrementalPCDFATreeBuilder
-     */
-    public static <I> DFACacheOracle<I> createTreePCCacheOracle(Alphabet<I> alphabet,
-                                                                MembershipOracle<I, Boolean> delegate) {
-        return new DFACacheOracle<>(new IncrementalPCDFATreeBuilder<>(alphabet), delegate);
-    }
-
-    /**
-     * Creates a cache oracle for a DFA learning setup, using a DAG for internal cache organization.
-     *
-     * @param alphabet
-     *         the alphabet containing the symbols of possible queries
-     * @param delegate
-     *         the oracle to delegate queries to, in case of a cache-miss.
-     * @param <I>
-     *         input symbol type
-     *
-     * @return the cached {@link DFACacheOracle}.
-     *
-     * @see IncrementalDFADAGBuilder
-     */
-    public static <I> DFACacheOracle<I> createDAGCacheOracle(Alphabet<I> alphabet,
-                                                             MembershipOracle<I, Boolean> delegate) {
-        return new DFACacheOracle<>(new IncrementalDFADAGBuilder<>(alphabet), delegate);
-    }
-
-    /**
-     * Creates a prefix-closed cache oracle for a DFA learning setup, using a DAG for internal cache organization.
-     *
-     * @param alphabet
-     *         the alphabet containing the symbols of possible queries
-     * @param delegate
-     *         the oracle to delegate queries to, in case of a cache-miss.
-     * @param <I>
-     *         input symbol type
-     *
-     * @return the cached {@link DFACacheOracle}.
-     *
-     * @see IncrementalPCDFADAGBuilder
-     */
-    public static <I> DFACacheOracle<I> createDAGPCCacheOracle(Alphabet<I> alphabet,
-                                                               MembershipOracle<I, Boolean> delegate) {
-        return new DFACacheOracle<>(new IncrementalPCDFADAGBuilder<>(alphabet), delegate);
-    }
-
-    /**
-     * Creates an equivalence oracle that checks an hypothesis for consistency with the contents of this cache. Note
-     * that the returned oracle is backed by the cache data structure, i.e., it is sufficient to call this method once
-     * after creation of the cache.
-     *
-     * @return the cache consistency test backed by the contents of this cache.
-     */
     @Override
-    public DFACacheConsistencyTest<I> createCacheConsistencyTest() {
-        return new DFACacheConsistencyTest<>(incDfa, incDfaLock);
+    public DFAEquivalenceOracle<I> createCacheConsistencyTest() {
+        return new DFACacheConsistencyTest<>(incDfa);
     }
 
     @Override
     public void processQueries(Collection<? extends Query<I, Boolean>> queries) {
-        List<ProxyQuery<I>> unanswered = new ArrayList<>();
-
-        incDfaLock.readLock().lock();
-        try {
-            for (Query<I, Boolean> q : queries) {
-                Acceptance acc = incDfa.lookup(q.getInput());
-                if (acc != Acceptance.DONT_KNOW) {
-                    q.answer(acc.toBoolean());
-                } else {
-                    unanswered.add(new ProxyQuery<>(q));
-                }
-            }
-        } finally {
-            incDfaLock.readLock().unlock();
+        if (queries.isEmpty()) {
+            return;
         }
 
-        delegate.processQueries(unanswered);
+        final Pair<Collection<ProxyQuery<I>>, Collection<Query<I, Boolean>>> cacheResult = queryCache(queries);
+        final Collection<ProxyQuery<I>> unanswered = cacheResult.getFirst();
+        final Collection<Query<I, Boolean>> duplicates = cacheResult.getSecond();
 
-        incDfaLock.writeLock().lock();
-        try {
-            for (ProxyQuery<I> q : unanswered) {
-                incDfa.insert(q.getInput(), q.getAnswer());
-            }
-        } finally {
-            incDfaLock.writeLock().unlock();
+        delegate.processQueries(unanswered);
+        updateCache(unanswered);
+
+        if (!duplicates.isEmpty()) {
+            queryCache(duplicates);
         }
     }
 
@@ -204,6 +109,34 @@ public class DFACacheOracle<I>
         }
 
         this.incDfa = state.getBuilder();
+    }
+
+    protected Pair<Collection<ProxyQuery<I>>, Collection<Query<I, Boolean>>> queryCache(Collection<? extends Query<I, Boolean>> queries) {
+        final List<ProxyQuery<I>> unanswered = new ArrayList<>();
+        final List<Query<I, Boolean>> duplicates = new ArrayList<>();
+        final Set<Word<I>> cache = new HashSet<>();
+
+        for (Query<I, Boolean> q : queries) {
+            final Word<I> input = q.getInput();
+            final Acceptance acc = incDfa.lookup(input);
+            if (acc != Acceptance.DONT_KNOW) {
+                q.answer(acc.toBoolean());
+            } else {
+                if (cache.add(input)) { // never seen before
+                    unanswered.add(new ProxyQuery<>(q));
+                } else {
+                    duplicates.add(q);
+                }
+            }
+        }
+
+        return Pair.of(unanswered, duplicates);
+    }
+
+    protected void updateCache(Collection<? extends ProxyQuery<I>> queries) {
+        for (ProxyQuery<I> q : queries) {
+            incDfa.insert(q.getInput(), q.getAnswer());
+        }
     }
 
     public static class DFACacheOracleState<I> {

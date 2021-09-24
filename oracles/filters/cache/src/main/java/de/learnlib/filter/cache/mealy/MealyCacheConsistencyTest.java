@@ -16,7 +16,6 @@
 package de.learnlib.filter.cache.mealy;
 
 import java.util.Collection;
-import java.util.concurrent.locks.ReadWriteLock;
 
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.EquivalenceOracle.MealyEquivalenceOracle;
@@ -24,7 +23,6 @@ import de.learnlib.api.query.DefaultQuery;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.incremental.mealy.IncrementalMealyBuilder;
 import net.automatalib.words.Word;
-import net.automatalib.words.WordBuilder;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -41,42 +39,27 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public class MealyCacheConsistencyTest<I, O> implements MealyEquivalenceOracle<I, O> {
 
     private final IncrementalMealyBuilder<I, O> incMealy;
-    private final ReadWriteLock incMealyLock;
 
     /**
      * Constructor.
      *
      * @param incMealy
      *         the {@link IncrementalMealyBuilder} data structure underlying the cache
-     * @param lock
-     *         the read-write lock for accessing the cache concurrently
      */
-    public MealyCacheConsistencyTest(IncrementalMealyBuilder<I, O> incMealy, ReadWriteLock lock) {
+    public MealyCacheConsistencyTest(IncrementalMealyBuilder<I, O> incMealy) {
         this.incMealy = incMealy;
-        this.incMealyLock = lock;
     }
 
     @Override
     public @Nullable DefaultQuery<I, Word<O>> findCounterExample(MealyMachine<?, I, ?, O> hypothesis,
                                                                  Collection<? extends I> inputs) {
-        WordBuilder<O> wb;
-        Word<I> w;
+        final Word<I> w = incMealy.findSeparatingWord(hypothesis, inputs, false);
 
-        incMealyLock.readLock().lock();
-        try {
-            w = incMealy.findSeparatingWord(hypothesis, inputs, false);
-            if (w == null) {
-                return null;
-            }
-            wb = new WordBuilder<>(w.length());
-            incMealy.lookup(w, wb);
-        } finally {
-            incMealyLock.readLock().unlock();
+        if (w == null) {
+            return null;
         }
 
-        DefaultQuery<I, Word<O>> result = new DefaultQuery<>(w);
-        result.answer(wb.toWord());
-        return result;
+        return new DefaultQuery<>(w, incMealy.lookup(w));
     }
 
 }

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.learnlib.algorithms.spa.provider;
+package de.learnlib.algorithms.spa.manager;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -184,7 +184,7 @@ public class OptimizingATRManager<I> implements ATRManager<I> {
                 final int callIdx = this.alphabet.findCallIndex(asBuilder, asBuilder.size() - 1);
                 final I procedure = asBuilder.get(callIdx);
                 asBuilder.subList(callIdx + 1, asBuilder.size() - 1).clear();
-                asBuilder.addAll(getTerminatingSequence(procedure).asList());
+                asBuilder.addAll(callIdx + 1, getTerminatingSequence(procedure).asList());
             }
 
             rsBuilder.remove(0);

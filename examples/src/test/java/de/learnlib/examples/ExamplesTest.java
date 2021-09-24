@@ -87,6 +87,11 @@ public class ExamplesTest {
     }
 
     @Test
+    public void testParallelismExample2() {
+        de.learnlib.examples.parallelism.ParallelismExample2.main(new String[0]);
+    }
+
+    @Test
     public void testPassiveExample1() {
         checkJVMCompatibility();
         de.learnlib.examples.passive.Example1.main(new String[0]);
@@ -151,8 +156,9 @@ public class ExamplesTest {
     }
 
     private static void checkJVMCompatibility() {
-        if (JVMUtil.getCanonicalSpecVersion() > 8) {
-            throw new SkipException("The headless AWT environment currently only works with Java 8 and below");
+        final int canonicalSpecVersion = JVMUtil.getCanonicalSpecVersion();
+        if (!(canonicalSpecVersion <= 8 || canonicalSpecVersion == 11)) {
+            throw new SkipException("The headless AWT environment currently only works with Java 11 or <=8");
         }
     }
 

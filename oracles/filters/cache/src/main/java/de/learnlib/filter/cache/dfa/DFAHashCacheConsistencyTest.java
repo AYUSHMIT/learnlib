@@ -17,7 +17,6 @@ package de.learnlib.filter.cache.dfa;
 
 import java.util.Collection;
 import java.util.Map;
-import java.util.concurrent.locks.Lock;
 
 import de.learnlib.api.oracle.EquivalenceOracle.DFAEquivalenceOracle;
 import de.learnlib.api.query.DefaultQuery;
@@ -28,29 +27,22 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 final class DFAHashCacheConsistencyTest<I> implements DFAEquivalenceOracle<I> {
 
     private final Map<Word<I>, Boolean> cache;
-    private final Lock cacheLock;
 
-    DFAHashCacheConsistencyTest(Map<Word<I>, Boolean> cache, Lock cacheLock) {
+    DFAHashCacheConsistencyTest(Map<Word<I>, Boolean> cache) {
         this.cache = cache;
-        this.cacheLock = cacheLock;
     }
 
     @Override
     public @Nullable DefaultQuery<I, Boolean> findCounterExample(DFA<?, I> hypothesis, Collection<? extends I> inputs) {
-        cacheLock.lock();
-        try {
-            for (Map.Entry<Word<I>, Boolean> cacheEntry : cache.entrySet()) {
-                Word<I> input = cacheEntry.getKey();
-                Boolean answer = cacheEntry.getValue();
+        for (Map.Entry<Word<I>, Boolean> cacheEntry : cache.entrySet()) {
+            Word<I> input = cacheEntry.getKey();
+            Boolean answer = cacheEntry.getValue();
 
-                if (!hypothesis.computeOutput(input).equals(answer)) {
-                    return new DefaultQuery<>(input, answer);
-                }
+            if (!hypothesis.computeOutput(input).equals(answer)) {
+                return new DefaultQuery<>(input, answer);
             }
-            return null;
-        } finally {
-            cacheLock.unlock();
         }
+        return null;
     }
 
 }
