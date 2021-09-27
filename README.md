@@ -23,7 +23,7 @@ ADT                 | `Mealy`              || OSTIA               | `SST`
 DHC                 | `Mealy`              || RPNI                | `DFA` `Mealy`
 Discrimination Tree | `DFA` `Mealy` `VPDA` || RPNI (EDSM)         | `DFA`
 Kearns & Vazirani   | `DFA` `Mealy`        || RPNI (MDL)          | `DFA`
-L* (incl. variants) | `DFA` `Mealy`
+L* (incl. variants) | `DFA` `Mealy` `ROCA` `VCA`
 NL*                 | `NFA`
 SPA                 | `SPA`
 TTT                 | `DFA` `Mealy` `VPDA`
