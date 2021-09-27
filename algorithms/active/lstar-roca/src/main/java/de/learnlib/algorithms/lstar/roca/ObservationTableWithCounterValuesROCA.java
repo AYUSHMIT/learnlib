@@ -1001,7 +1001,7 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
     private RowImpl<I> createSpRow(Word<I> prefix) {
         ObservationTreeNode<I> node = observationTreeRoot.getPrefix(prefix, 0);
-        RowImpl<I> row = new RowImpl<>(numRows++, prefix, node, this, alphabet.size());
+        RowImpl<I> row = new RowImpl<>(numRows++, node, this, alphabet.size());
         allRows.add(row);
         rowMap.put(prefix, row);
         shortPrefixRows.add(row);
@@ -1010,7 +1010,7 @@ public final class ObservationTableWithCounterValuesROCA<I> implements MutableOb
 
     private RowImpl<I> createLpRow(Word<I> prefix) {
         ObservationTreeNode<I> node = observationTreeRoot.getPrefix(prefix, 0);
-        RowImpl<I> row = new RowImpl<>(numRows++, prefix, node, this);
+        RowImpl<I> row = new RowImpl<>(numRows++, node, this);
         allRows.add(row);
         rowMap.put(prefix, row);
         int idx = longPrefixRows.size();

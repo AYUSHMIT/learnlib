@@ -19,7 +19,6 @@ import net.automatalib.words.Word;
 class RowImpl<I> implements Row<I> {
     private final int rowId;
     private final ObservationTreeNode<I> node;
-    private final Word<I> label;
 
     private int approxId = -1;
     private int lpIndex;
@@ -33,16 +32,15 @@ class RowImpl<I> implements Row<I> {
     private List<Boolean> outputs;
     private List<PairCounterValueOutput<Boolean>> cvOutputs;
 
-    RowImpl(int rowId, Word<I> label, ObservationTreeNode<I> node, ObservationTableWithCounterValuesROCA<I> table) {
+    RowImpl(int rowId, ObservationTreeNode<I> node, ObservationTableWithCounterValuesROCA<I> table) {
         this.rowId = rowId;
-        this.label = label;
         this.node = node;
         this.nodes = new ArrayList<>();
         this.table = table;
     }
 
-    RowImpl(int rowId, Word<I> label, ObservationTreeNode<I> node, ObservationTableWithCounterValuesROCA<I> table, int alphabetSize) {
-        this(rowId, label, node, table);
+    RowImpl(int rowId, ObservationTreeNode<I> node, ObservationTableWithCounterValuesROCA<I> table, int alphabetSize) {
+        this(rowId, node, table);
 
         makeShort(alphabetSize);
     }
@@ -71,7 +69,7 @@ class RowImpl<I> implements Row<I> {
 
     @Override
     public Word<I> getLabel() {
-        return label;
+        return getNode().getPrefix();
     }
 
     @Override
