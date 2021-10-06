@@ -8,6 +8,7 @@ import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.util.AbstractExperiment;
 import net.automatalib.automata.oca.VCA;
+import net.automatalib.automata.oca.automatoncountervalues.VCAFromDescription;
 import net.automatalib.util.automata.oca.OCAUtil;
 import net.automatalib.words.VPDAlphabet;
 
@@ -49,12 +50,12 @@ public class VCAExperiment<I> extends AbstractExperiment<VCA<?, I>> {
         profileStop(LEARNING_VCA_PROFILE_KEY);
 
         while (true) {
-            final Collection<VCA<?, I>> hypotheses = learningAlgorithm.getHypothesisModels();
+            final Collection<VCAFromDescription<?, I>> hypotheses = learningAlgorithm.getHypothesisModels();
 
             LOGGER.logPhase("Searching for counterexample");
             DefaultQuery<I, Boolean> counterexample = null;
             int maximalCounterValue = learningAlgorithm.getCounterLimit();
-            for (VCA<?, I> hypothesis : hypotheses) {
+            for (VCAFromDescription<?, I> hypothesis : hypotheses) {
                 if (logModels) {
                     LOGGER.logModel(hypothesis);
                 }
@@ -87,7 +88,7 @@ public class VCAExperiment<I> extends AbstractExperiment<VCA<?, I>> {
                 // Thus, we end up here and use the learned DFA as an VCA.
                 // Since the language is regular, the DFA accepts the correct language, and so
                 // does the VCA.
-                VCA<?, I> hypothesis = learningAlgorithm.getlearnedDFAAsVCA();
+                VCAFromDescription<?, I> hypothesis = learningAlgorithm.getLearnedDFAAsVCA();
                 profileStart(COUNTEREXAMPLE_PROFILE_KEY);
                 counterexample = equivalenceOracle.findCounterExample(hypothesis, alphabet);
                 profileStop(COUNTEREXAMPLE_PROFILE_KEY);

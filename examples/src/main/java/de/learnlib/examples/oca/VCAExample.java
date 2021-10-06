@@ -9,10 +9,10 @@ import de.learnlib.api.oracle.SingleQueryOracle;
 import de.learnlib.datastructure.observationtable.OTUtils;
 import de.learnlib.datastructure.observationtable.writer.StratifiedObservationTableASCIIWriter;
 import de.learnlib.filter.statistic.oracle.ROCACounterOracle;
-import de.learnlib.filter.statistic.oracle.VCACounterEQOracle;
+import de.learnlib.filter.statistic.oracle.vca.VCACounterEQOracle;
 import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonCounterEQOracle;
 import de.learnlib.oracle.equivalence.vca.RestrictedAutomatonVCASimulatorEQOracle;
-import de.learnlib.oracle.equivalence.vca.VCASimulatorEQOracle;
+import de.learnlib.oracle.equivalence.vca.VCARandomEQOracle;
 import de.learnlib.oracle.membership.SimulatorOracle.ROCASimulatorOracle;
 import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.automata.oca.DefaultVCA;
@@ -65,7 +65,7 @@ public class VCAExample {
         SingleQueryOracle.SingleQueryOracleROCA<I> sul = new ROCASimulatorOracle<>(target);
         ROCACounterOracle<I> membershipOracle = new ROCACounterOracle<>(sul, "membership queries");
 
-        EquivalenceOracle.VCAEquivalenceOracle<I> eqOracle = new VCASimulatorEQOracle<>(target);
+        EquivalenceOracle.VCAEquivalenceOracle<I> eqOracle = new VCARandomEQOracle<>(target);
         VCACounterEQOracle<I> equivalenceOracle = new VCACounterEQOracle<>(eqOracle, "equivalence queries");
 
         RestrictedAutomatonVCASimulatorEQOracle<I> resEqOracle = new RestrictedAutomatonVCASimulatorEQOracle<>(target,

@@ -12,9 +12,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.query.DefaultQuery;
-import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.oca.State;
-import net.automatalib.automata.oca.automatoncountervalues.DefaultVCAWithDescription;
+import net.automatalib.automata.oca.VCA;
+import net.automatalib.automata.oca.automatoncountervalues.VCAFromDescription;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
 
@@ -23,26 +23,27 @@ import net.automatalib.words.Word;
  * 
  * It is assumed the hypothesis is constructed from a periodic description.
  * 
- * The oracle will not finish for a correct hypothesis.
+ * The oracle may not finish for a correct hypothesis.
+ * However, if the hypothesis is incorrect, it is guaranteed to finish (but may not necessarily return a counterexample).
  * 
  * @param <I> Alphabet type
  * @author Gaëtan Staquet
  */
-public class VCARandomEQOracle<I> implements EquivalenceOracle<DefaultVCAWithDescription<I>, I, Boolean> {
+public class VCARandomEQOracle<I> implements EquivalenceOracle.VCAEquivalenceOracle<I> {
 
-    private final ROCA<?, I> reference;
+    private final VCA<?, I> reference;
     private final Alphabet<I> alphabet;
     private final Random random;
 
-    public VCARandomEQOracle(final ROCA<?, I> reference) {
+    public VCARandomEQOracle(final VCA<?, I> reference) {
         this(reference, reference.getAlphabet());
     }
 
-    public VCARandomEQOracle(final ROCA<?, I> reference, final Alphabet<I> alphabet) {
+    public VCARandomEQOracle(final VCA<?, I> reference, final Alphabet<I> alphabet) {
         this(reference, alphabet, new Random());
     }
 
-    public VCARandomEQOracle(final ROCA<?, I> reference, final Alphabet<I> alphabet, final Random rand) {
+    public VCARandomEQOracle(final VCA<?, I> reference, final Alphabet<I> alphabet, final Random rand) {
         this.reference = reference;
         this.alphabet = alphabet;
         this.random = rand;
@@ -62,7 +63,7 @@ public class VCARandomEQOracle<I> implements EquivalenceOracle<DefaultVCAWithDes
      * @return A word that separated both ROCAs, or null if the ROCAs are
      *         equivalent.
      */
-    private <L1, L2> @Nullable Word<I> findSeparatingWordByExploration(final ROCA<L1, I> roca1, final ROCA<L2, I> roca2,
+    private <L1, L2> @Nullable Word<I> findSeparatingWordByExploration(final VCA<L1, I> roca1, final VCA<L2, I> roca2,
             final Alphabet<I> alphabet, final long maxCounterValue) {
         // The idea is to explore the state space of both ROCAs at once with a parallel
         // BFS.
@@ -100,6 +101,7 @@ public class VCARandomEQOracle<I> implements EquivalenceOracle<DefaultVCAWithDes
                 if (obj.getClass() != getClass()) {
                     return false;
                 }
+                @SuppressWarnings("unchecked")
                 InQueue o = (InQueue) obj;
                 return Objects.equals(o.state1, this.state1) && Objects.equals(o.state2, this.state2);
             }
@@ -146,7 +148,7 @@ public class VCARandomEQOracle<I> implements EquivalenceOracle<DefaultVCAWithDes
     }
 
     @Override
-    public @Nullable DefaultQuery<I, Boolean> findCounterExample(DefaultVCAWithDescription<I> hypothesis,
+    public @Nullable DefaultQuery<I, Boolean> findCounterExample(VCAFromDescription<?, I> hypothesis,
             Collection<? extends I> inputs) {
         long maxCounterValue = (long) Math.pow(hypothesis.size() * reference.size(), 2);
         boolean cont = true;

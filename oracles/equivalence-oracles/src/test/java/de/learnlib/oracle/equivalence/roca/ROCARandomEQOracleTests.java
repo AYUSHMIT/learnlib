@@ -121,7 +121,6 @@ public class ROCARandomEQOracleTests {
         DefaultAutomatonWithCounterValuesROCA<Character> dfa = OCAUtil.constructRestrictedAutomaton(roca2, 10);
         for (ROCAFromDescription<?, Character> r : dfa.toAutomata(10)) {
             DefaultQuery<Character, Boolean> query = oracle.findCounterExample(r, alphabet);
-            System.out.println(query);
             Assert.assertNotNull(query);
         }
         Assert.assertNotNull(oracle.findCounterExample(dfa.asAutomaton(), alphabet));

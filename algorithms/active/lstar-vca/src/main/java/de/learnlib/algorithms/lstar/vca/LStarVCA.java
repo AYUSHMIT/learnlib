@@ -18,6 +18,7 @@ import net.automatalib.SupportsGrowingAlphabet;
 import net.automatalib.automata.oca.VCA;
 import net.automatalib.automata.oca.automatoncountervalues.DefaultAutomatonWithCounterValuesState;
 import net.automatalib.automata.oca.automatoncountervalues.DefaultAutomatonWithCounterValuesVCA;
+import net.automatalib.automata.oca.automatoncountervalues.VCAFromDescription;
 import net.automatalib.util.automata.oca.OCAUtil;
 import net.automatalib.words.VPDAlphabet;
 import net.automatalib.words.Word;
@@ -43,7 +44,7 @@ import net.automatalib.words.impl.Alphabets;
  * @author Gaëtan Staquet
  */
 public class LStarVCA<I>
-        implements OTLearner.OTLearnerVCA<I>, GlobalSuffixLearner<VCA<?, I>, I, Boolean>, SupportsGrowingAlphabet<I> {
+        implements OTLearner.OTLearnerVCA<I>, GlobalSuffixLearner<VCAFromDescription<?, I>, I, Boolean>, SupportsGrowingAlphabet<I> {
 
     private final VPDAlphabet<I> alphabet;
 
@@ -72,12 +73,12 @@ public class LStarVCA<I>
     }
 
     @Override
-    public VCA<?, I> getlearnedDFAAsVCA() {
+    public VCAFromDescription<?, I> getLearnedDFAAsVCA() {
         return hypothesis.asAutomaton();
     }
 
     @Override
-    public Collection<VCA<?, I>> getHypothesisModels() {
+    public Collection<VCAFromDescription<?, I>> getHypothesisModels() {
         return hypothesis.toAutomata(counterLimit);
     }
 

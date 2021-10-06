@@ -21,8 +21,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import de.learnlib.api.query.DefaultQuery;
 import net.automatalib.automata.fsa.DFA;
-import net.automatalib.automata.oca.VCA;
 import net.automatalib.automata.oca.automatoncountervalues.ROCAFromDescription;
+import net.automatalib.automata.oca.automatoncountervalues.VCAFromDescription;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.words.Word;
 
@@ -104,7 +104,7 @@ public interface EquivalenceOracle<A, I, D> {
      * 
      * @author Gaëtan Staquet
      */
-    interface VCAEquivalenceOracle<I> extends EquivalenceOracle<VCA<?, I>, I, Boolean> {}
+    interface VCAEquivalenceOracle<I> extends EquivalenceOracle<VCAFromDescription<?, I>, I, Boolean> {}
 
     /**
      * A specialization of the {@link EquivalenceOracle} interface for a restricted automaton (i.e., a DFA annotated with counter values, up to a given counter value) learning scenario.

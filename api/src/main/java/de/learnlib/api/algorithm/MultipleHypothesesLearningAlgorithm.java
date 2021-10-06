@@ -81,7 +81,7 @@ public interface MultipleHypothesesLearningAlgorithm<M, I, D> extends LearningAl
          * 
          * @return A VCA constructed from the learned DFA
          */
-        VCA<?, I> getLearnedDFAAsVCA();
+        VCAFromDescription<?, I> getLearnedDFAAsVCA();
 
         int getCounterLimit();
     }
