@@ -7,7 +7,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.EquivalenceOracle.DFAEquivalenceOracle;
 import de.learnlib.api.oracle.EquivalenceOracle.MealyEquivalenceOracle;
-import de.learnlib.api.oracle.EquivalenceOracle.ROCAEquivalenceOracle;
 import de.learnlib.api.oracle.EquivalenceOracle.VCAEquivalenceOracle;
 import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.api.statistic.StatisticCollector;
@@ -17,7 +16,6 @@ import de.learnlib.buildtool.refinement.annotation.Interface;
 import de.learnlib.buildtool.refinement.annotation.Map;
 import de.learnlib.filter.statistic.Counter;
 import net.automatalib.automata.fsa.DFA;
-import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.oca.VCA;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.words.Word;
@@ -42,13 +40,6 @@ import net.automatalib.words.Word;
                                             to = MealyEquivalenceOracle.class,
                                             withGenerics = {"I", "O"}),
                     interfaces = @Interface(clazz = MealyEquivalenceOracle.class, generics = {"I", "O"}))
-@GenerateRefinement(name = "ROCACounterEQOracle",
-                    generics = "I",
-                    parentGenerics = {@Generic(clazz = ROCA.class, generics = {"?", "I"}), @Generic("I"), @Generic(clazz = Boolean.class)},
-                    parameterMapping = @Map(from = EquivalenceOracle.class,
-                                            to = ROCAEquivalenceOracle.class,
-                                            withGenerics = "I"),
-                    interfaces = @Interface(clazz = ROCAEquivalenceOracle.class, generics = "I"))
 @GenerateRefinement(name = "VCACounterEQOracle",
                     generics = "I",
                     parentGenerics = {@Generic(clazz = VCA.class, generics = {"?", "I"}), @Generic("I"), @Generic(clazz = Boolean.class)},

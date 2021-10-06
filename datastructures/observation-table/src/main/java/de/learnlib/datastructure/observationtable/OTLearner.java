@@ -18,8 +18,8 @@ package de.learnlib.datastructure.observationtable;
 import de.learnlib.api.algorithm.LearningAlgorithm;
 import de.learnlib.api.algorithm.MultipleHypothesesLearningAlgorithm;
 import net.automatalib.automata.fsa.DFA;
-import net.automatalib.automata.oca.ROCA;
-import net.automatalib.automata.oca.VCA;
+import net.automatalib.automata.oca.automatoncountervalues.ROCAFromDescription;
+import net.automatalib.automata.oca.automatoncountervalues.VCAFromDescription;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.words.Word;
 
@@ -29,7 +29,7 @@ public interface OTLearner<M, I, D> extends LearningAlgorithm<M, I, D>, Observat
 
     interface OTLearnerMealy<I, O> extends MealyLearner<I, O>, OTLearner<MealyMachine<?, I, ?, O>, I, Word<O>> {}
 
-    interface OTLearnerROCA<I> extends MultipleHypothesesLearningAlgorithm.ROCALearner<I>, OTLearner<ROCA<?, I>, I, Boolean> {}
+    interface OTLearnerROCA<I> extends MultipleHypothesesLearningAlgorithm.ROCALearner<I>, OTLearner<ROCAFromDescription<?, I>, I, Boolean> {}
 
-    interface OTLearnerVCA<I> extends MultipleHypothesesLearningAlgorithm.VCALearner<I>, OTLearner<VCA<?, I>, I, Boolean> {}
+    interface OTLearnerVCA<I> extends MultipleHypothesesLearningAlgorithm.VCALearner<I>, OTLearner<VCAFromDescription<?, I>, I, Boolean> {}
 }

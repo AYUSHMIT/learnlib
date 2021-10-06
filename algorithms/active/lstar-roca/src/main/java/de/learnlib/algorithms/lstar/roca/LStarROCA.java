@@ -23,10 +23,10 @@ import de.learnlib.filter.statistic.Counter;
 import de.learnlib.util.MQUtil;
 import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.SupportsGrowingAlphabet;
-import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.oca.automatoncountervalues.AutomatonWithCounterValues;
 import net.automatalib.automata.oca.automatoncountervalues.DefaultAutomatonWithCounterValuesROCA;
 import net.automatalib.automata.oca.automatoncountervalues.DefaultAutomatonWithCounterValuesState;
+import net.automatalib.automata.oca.automatoncountervalues.ROCAFromDescription;
 import net.automatalib.commons.util.Pair;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
@@ -63,7 +63,7 @@ import net.automatalib.words.impl.Alphabets;
  * @author Gaëtan Staquet
  */
 public class LStarROCA<I>
-        implements OTLearner.OTLearnerROCA<I>, GlobalSuffixLearner<ROCA<?, I>, I, Boolean>, SupportsGrowingAlphabet<I> {
+        implements OTLearner.OTLearnerROCA<I>, GlobalSuffixLearner<ROCAFromDescription<?, I>, I, Boolean>, SupportsGrowingAlphabet<I> {
 
     public static final String CLOSED_TABLE_PROFILE_KEY = "Making the table closed, Sigma-consistent, and bottom-consistent";
     public static final String COUNTEREXAMPLE_DFA_PROFILE_KEY = "Searching for counterexample DFA";
@@ -109,13 +109,13 @@ public class LStarROCA<I>
     }
 
     @Override
-    public List<ROCA<?, I>> getHypothesisModels() {
+    public List<ROCAFromDescription<?, I>> getHypothesisModels() {
         if (!table.isInitialized()) {
             return Collections.singletonList(hypothesis.asAutomaton());
         }
 
         SimpleProfiler.start(FINDING_PERIODIC_DESCRIPTIONS);
-        List<ROCA<?, I>> rocas = hypothesis.toAutomata(counterLimit);
+        List<ROCAFromDescription<?, I>> rocas = hypothesis.toAutomata(counterLimit);
         SimpleProfiler.stop(FINDING_PERIODIC_DESCRIPTIONS);
         return rocas;
     }
@@ -423,7 +423,7 @@ public class LStarROCA<I>
     }
 
     @Override
-    public ROCA<?, I> getlearnedDFAAsROCA() {
+    public ROCAFromDescription<?, I> getLearnedDFAAsROCA() {
         return hypothesis.asAutomaton();
     }
 

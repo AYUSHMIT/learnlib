@@ -17,13 +17,14 @@ package de.learnlib.api.oracle;
 
 import java.util.Collection;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 import de.learnlib.api.query.DefaultQuery;
 import net.automatalib.automata.fsa.DFA;
-import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.oca.VCA;
+import net.automatalib.automata.oca.automatoncountervalues.ROCAFromDescription;
 import net.automatalib.automata.transducers.MealyMachine;
 import net.automatalib.words.Word;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * An equivalence oracle, which checks hypothesis automata against the (possibly unknown) system under learning (SUL).
@@ -94,7 +95,7 @@ public interface EquivalenceOracle<A, I, D> {
      * 
      * @author Gaëtan Staquet
      */
-    interface ROCAEquivalenceOracle<I> extends EquivalenceOracle<ROCA<?, I>, I, Boolean> {}
+    interface ROCAEquivalenceOracle<I> extends EquivalenceOracle<ROCAFromDescription<?, I>, I, Boolean> {}
 
     /**
      * A specialization of the {@link EquivalenceOracle} interface for a VCA learning scenario.

@@ -9,9 +9,9 @@ import de.learnlib.api.oracle.SingleQueryOracle;
 import de.learnlib.datastructure.observationtable.OTUtils;
 import de.learnlib.filter.cache.roca.CounterValueHashCacheOracle;
 import de.learnlib.filter.statistic.oracle.CounterValueCounterOracle;
-import de.learnlib.filter.statistic.oracle.ROCACounterEQOracle;
 import de.learnlib.filter.statistic.oracle.ROCACounterOracle;
-import de.learnlib.oracle.equivalence.roca.ROCASimulatorEQOracle;
+import de.learnlib.filter.statistic.oracle.roca.ROCACounterEQOracle;
+import de.learnlib.oracle.equivalence.roca.ROCARandomEQOracle;
 import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonCounterEQOracle;
 import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonROCASimulatorEQOracle;
 import de.learnlib.oracle.membership.SimulatorOracle.ROCASimulatorOracle;
@@ -69,7 +69,7 @@ public class ROCAExample {
         CounterValueCounterOracle<I> counterValueOracle = new CounterValueCounterOracle<>(counterValueCache,
                 "counter value queries");
 
-        EquivalenceOracle.ROCAEquivalenceOracle<I> eqOracle = new ROCASimulatorEQOracle<>(target);
+        EquivalenceOracle.ROCAEquivalenceOracle<I> eqOracle = new ROCARandomEQOracle<>(target);
         ROCACounterEQOracle<I> equivalenceOracle = new ROCACounterEQOracle<>(eqOracle, "equivalence queries");
 
         RestrictedAutomatonROCASimulatorEQOracle<I> resEqOracle = new RestrictedAutomatonROCASimulatorEQOracle<>(target,

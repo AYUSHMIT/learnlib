@@ -2,8 +2,9 @@ package de.learnlib.api.algorithm;
 
 import java.util.Collection;
 
-import net.automatalib.automata.oca.ROCA;
 import net.automatalib.automata.oca.VCA;
+import net.automatalib.automata.oca.automatoncountervalues.ROCAFromDescription;
+import net.automatalib.automata.oca.automatoncountervalues.VCAFromDescription;
 import net.automatalib.words.Word;
 
 /**
@@ -44,17 +45,17 @@ public interface MultipleHypothesesLearningAlgorithm<M, I, D> extends LearningAl
      * 
      * @param <I> Input alphabet type
      */
-    interface ROCALearner<I> extends MultipleHypothesesLearningAlgorithm<ROCA<?, I>, I, Boolean> {
+    interface ROCALearner<I> extends MultipleHypothesesLearningAlgorithm<ROCAFromDescription<?, I>, I, Boolean> {
         /**
          * Gets the learned DFA (the restricted automaton up to a counter value) as an
          * ROCA.
          * 
          * @return An ROCA constructed from the learned DFA
          */
-        ROCA<?, I> getlearnedDFAAsROCA();
+        ROCAFromDescription<?, I> getLearnedDFAAsROCA();
 
         @Override
-        Collection<ROCA<?, I>> getHypothesisModels();
+        Collection<ROCAFromDescription<?, I>> getHypothesisModels();
 
         int getCounterLimit();
 
@@ -73,14 +74,14 @@ public interface MultipleHypothesesLearningAlgorithm<M, I, D> extends LearningAl
      * 
      * @param <I> Input alphabet type
      */
-    interface VCALearner<I> extends MultipleHypothesesLearningAlgorithm<VCA<?, I>, I, Boolean> {
+    interface VCALearner<I> extends MultipleHypothesesLearningAlgorithm<VCAFromDescription<?, I>, I, Boolean> {
         /**
          * Gets the learned DFA (the restricted automaton up to a counter value) as a
          * VCA.
          * 
          * @return A VCA constructed from the learned DFA
          */
-        VCA<?, I> getlearnedDFAAsVCA();
+        VCA<?, I> getLearnedDFAAsVCA();
 
         int getCounterLimit();
     }

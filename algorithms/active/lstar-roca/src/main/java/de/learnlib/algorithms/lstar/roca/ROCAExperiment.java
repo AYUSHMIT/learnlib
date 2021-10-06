@@ -8,6 +8,7 @@ import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.util.AbstractExperiment;
 import net.automatalib.automata.oca.ROCA;
+import net.automatalib.automata.oca.automatoncountervalues.ROCAFromDescription;
 import net.automatalib.words.Alphabet;
 
 /**
@@ -52,11 +53,11 @@ public final class ROCAExperiment<I> extends AbstractExperiment<ROCA<?, I>> {
                 return null;
             }
 
-            final Collection<ROCA<?, I>> hypotheses = learningAlgorithm.getHypothesisModels();
+            final Collection<ROCAFromDescription<?, I>> hypotheses = learningAlgorithm.getHypothesisModels();
 
             LOGGER.logPhase("Searching for counterexample");
             DefaultQuery<I, Boolean> counterexample = null;
-            for (ROCA<?, I> hypothesis : hypotheses) {
+            for (ROCAFromDescription<?, I> hypothesis : hypotheses) {
                 if (logModels) {
                     LOGGER.logModel(hypothesis);
                 }
@@ -91,7 +92,7 @@ public final class ROCAExperiment<I> extends AbstractExperiment<ROCA<?, I>> {
                 // Thus, we end up here and use the learned DFA as an ROCA.
                 // Since the language is regular, the DFA accepts the correct language, and so
                 // does the ROCA.
-                ROCA<?, I> hypothesis = learningAlgorithm.getlearnedDFAAsROCA();
+                ROCAFromDescription<?, I> hypothesis = learningAlgorithm.getLearnedDFAAsROCA();
                 profileStart(COUNTEREXAMPLE_PROFILE_KEY);
                 counterexample = equivalenceOracle.findCounterExample(hypothesis, alphabet);
                 profileStop(COUNTEREXAMPLE_PROFILE_KEY);

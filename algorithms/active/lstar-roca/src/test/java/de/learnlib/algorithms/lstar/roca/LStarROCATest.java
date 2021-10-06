@@ -19,12 +19,13 @@ import de.learnlib.examples.dfa.ExamplePaulAndMary;
 import de.learnlib.examples.roca.ExampleRandomROCA;
 import de.learnlib.examples.roca.ExampleRegularROCA;
 import de.learnlib.examples.roca.ExampleTinyROCA;
-import de.learnlib.oracle.equivalence.roca.ROCASimulatorEQOracle;
+import de.learnlib.oracle.equivalence.roca.ROCARandomEQOracle;
 import de.learnlib.oracle.equivalence.roca.RestrictedAutomatonROCASimulatorEQOracle;
 import de.learnlib.oracle.membership.SimulatorOracle.ROCASimulatorOracle;
 import de.learnlib.oracle.membership.roca.CounterValueOracle;
 import net.automatalib.automata.fsa.DFA;
 import net.automatalib.automata.oca.ROCA;
+import net.automatalib.automata.oca.automatoncountervalues.ROCAFromDescription;
 import net.automatalib.incremental.dfa.Acceptance;
 import net.automatalib.incremental.dfa.tree.IncrementalPCDFATreeBuilder;
 import net.automatalib.util.automata.oca.OCAUtil;
@@ -43,7 +44,6 @@ public class LStarROCATest {
         int maxRounds = (int) Math.pow(target.size(), 4);
         ROCA<?, I> learned = run(target, alphabet, learner, eqOracle, membershipOracle, counterValueOracle, maxRounds);
         Assert.assertNotNull(learned);
-        Assert.assertTrue(OCAUtil.testEquivalence(target, learned, alphabet));
 
         ObservationTableWithCounterValuesROCA<I> table = learner.getObservationTable();
         checkPrefixTable(table);
@@ -58,9 +58,9 @@ public class LStarROCATest {
         while (maxRounds-- > 0) {
             verifyInvariants(learner.getObservationTable().getObservationTreeRoot(), membershipOracle,
                     counterValueOracle, learner.getCounterLimit());
-            final Collection<ROCA<?, I>> hypotheses = learner.getHypothesisModels();
+            final Collection<ROCAFromDescription<?, I>> hypotheses = learner.getHypothesisModels();
             DefaultQuery<I, Boolean> counterexample = null;
-            for (ROCA<?, I> hypothesis : hypotheses) {
+            for (ROCAFromDescription<?, I> hypothesis : hypotheses) {
                 DefaultQuery<I, Boolean> ce = eqOracle.findCounterExample(hypothesis, alphabet);
 
                 if (ce == null) {
@@ -72,7 +72,7 @@ public class LStarROCATest {
             }
 
             if (counterexample == null) {
-                ROCA<?, I> hypothesis = learner.getlearnedDFAAsROCA();
+                ROCAFromDescription<?, I> hypothesis = learner.getLearnedDFAAsROCA();
                 counterexample = eqOracle.findCounterExample(hypothesis, alphabet);
                 if (counterexample == null) {
                     return hypothesis;
@@ -153,7 +153,7 @@ public class LStarROCATest {
     private <I> void launch(ROCA<?, I> roca, Alphabet<I> alphabet) {
         ROCAMembershipOracle<I> mOracle = new ROCASimulatorOracle<>(roca);
         CounterValueOracle<I> counterValueOracle = new CounterValueOracle<>(roca);
-        ROCAEquivalenceOracle<I> rocaEqOracle = new ROCASimulatorEQOracle<>(roca);
+        ROCAEquivalenceOracle<I> rocaEqOracle = new ROCARandomEQOracle<>(roca);
         RestrictedAutomatonEquivalenceOracle<I> restrictedEqOracle = new RestrictedAutomatonROCASimulatorEQOracle<>(
                 roca, alphabet);
 
