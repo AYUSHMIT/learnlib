@@ -98,6 +98,9 @@ For developing the code base of LearnLib it is suggested to use one of the major
 * [Falk Howar][5] (2013 - )
 * [Malte Isberner][4] (2013 - 2015)
 
+## License for ROCAs and VCAs
+All the files in the packages `de.learnlib.algorithms.lstar.roca`, `de.learnlib.algorithms.lstar.vca`, `de.learnlib.oracle.membership.roca`, `de.learnlib.oracle.equivalence.vca`, `de.learnlib.oracle.equivalence.roca`, `de.learnlib.filter.cache.roca`, ` de.learnlib.examples.oca` and the classes `de.learnlib.filter.statistic.oracle.CounterEQOracle`, `de.learnlib.util.AbstractExperiment` belong to University of Mons and University Antwerpen.
+Moreover, the files `api/src/main/java/de/learnlib/api/oracle/EquivalenceOracle.java`, `api/src/main/java/de/learnlib/api/oracle/MembershipOracle.java`, `api/src/main/java/de/learnlib/api/oracle/SingleQueryOracle.java`, `commons/util/src/main/java/de/learnlib/util/Experiment.java`, `oracles/filters/statistics/src/main/java/de/learnlib/filter/statistic/oracle/CounterEQOracle.java`, `oracles/filters/statistics/src/main/java/de/learnlib/filter/statistic/oracle/CounterOracle.java`, ` oracles/membership-oracles/src/main/java/de/learnlib/oracle/membership/SimulatorOracle.java`, `datastructures/observation-table/src/main/java/de/learnlib/datastructure/observationtable/writer/StratifiedObservationTableASCIIWriter.java`, `datastructures/observation-table/src/main/java/de/learnlib/datastructure/observationtable/writer/StratifiedObservationTableHTMLWriter.java`,  `algorithms/active/pom.xml`, `examples/pom.xml`, `datastructures/observation-table/pom.xml`, `pom.xml`, and `README.md` were modified by University of Mons and University Antwerpen.
 
 [1]: http://www.apache.org/licenses/LICENSE-2.0
 [2]: http://www.cs.tu-dortmund.de

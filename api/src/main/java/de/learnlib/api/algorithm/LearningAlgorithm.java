@@ -76,5 +76,4 @@ public interface LearningAlgorithm<M, I, D> {
     interface DFALearner<I> extends LearningAlgorithm<DFA<?, I>, I, Boolean> {}
 
     interface MealyLearner<I, O> extends LearningAlgorithm<MealyMachine<?, I, ?, O>, I, Word<O>> {}
-
 }

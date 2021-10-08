@@ -1,4 +1,5 @@
 /* Copyright (C) 2013-2021 TU Dortmund
+ * (C) 2021 – University of Mons, University Antwerpen for the classes ROCACounterOracle and CounterValueCounterOracle, and the function getNextOracle().
  * This file is part of LearnLib, http://www.learnlib.de/.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
