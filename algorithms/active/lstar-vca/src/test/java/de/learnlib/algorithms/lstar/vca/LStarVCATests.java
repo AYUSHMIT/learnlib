@@ -27,7 +27,7 @@ import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.query.DefaultQuery;
 import de.learnlib.examples.vca.ExampleRandomVCA;
 import de.learnlib.oracle.equivalence.vca.RestrictedAutomatonVCASimulatorEQOracle;
-import de.learnlib.oracle.equivalence.vca.VCARandomEQOracle;
+import de.learnlib.oracle.equivalence.vca.VCASimulatorEQOracle;
 import de.learnlib.oracle.membership.SimulatorOracle.ROCASimulatorOracle;
 import net.automatalib.automata.oca.VCA;
 import net.automatalib.automata.oca.automatoncountervalues.VCAFromDescription;
@@ -39,7 +39,7 @@ import net.automatalib.words.impl.DefaultVPDAlphabet;
 public class LStarVCATests {
     private static <I> void runTest(VCA<?, I> target, VPDAlphabet<I> alphabet) {
         ROCASimulatorOracle<I> mOracle = new ROCASimulatorOracle<>(target);
-        VCAEquivalenceOracle<I> vcaEqOracle = new VCARandomEQOracle<>(target);
+        VCAEquivalenceOracle<I> vcaEqOracle = new VCASimulatorEQOracle<>(target);
         RestrictedAutomatonEquivalenceOracle<I> restrictedEqOracle = new RestrictedAutomatonVCASimulatorEQOracle<>(
                 target, alphabet);
 
