@@ -38,7 +38,7 @@ public class ROCARandomEQOracleTests {
 
         ROCALocation q0 = roca.addInitialLocation(false);
 
-        roca.addSuccessor(q0, 0, 'a', 0, q0);
+        roca.setSuccessor(q0, 0, 'a', 0, q0);
 
         DefaultAutomatonWithCounterValuesROCA<Character> dfaWithCounterValues = new DefaultAutomatonWithCounterValuesROCA<>(alphabet);
         DefaultAutomatonWithCounterValuesState q0_dfa = dfaWithCounterValues.addInitialState(false, 0);
@@ -57,12 +57,12 @@ public class ROCARandomEQOracleTests {
         ROCALocation q0 = roca.addInitialLocation(false);
         ROCALocation q1 = roca.addLocation(true);
 
-        roca.addSuccessor(q0, 0, 'a', +1, q0);
-        roca.addSuccessor(q0, 1, 'a', +1, q0);
-        roca.addSuccessor(q0, 1, 'b', 0, q1);
+        roca.setSuccessor(q0, 0, 'a', +1, q0);
+        roca.setSuccessor(q0, 1, 'a', +1, q0);
+        roca.setSuccessor(q0, 1, 'b', 0, q1);
 
-        roca.addSuccessor(q1, 0, 'a', 0, q1);
-        roca.addSuccessor(q1, 1, 'a', -1, q1);
+        roca.setSuccessor(q1, 0, 'a', 0, q1);
+        roca.setSuccessor(q1, 1, 'a', -1, q1);
 
         DefaultAutomatonWithCounterValuesROCA<Character> dfa = OCAUtil.constructRestrictedAutomaton(roca, 10);
 
@@ -85,11 +85,11 @@ public class ROCARandomEQOracleTests {
         // L_1 = {a^n | n >= 0}
         // L_2 = {}
         Alphabet<Character> alphabet = Alphabets.singleton('a');
-        DefaultROCA<Character> roca1 = new DefaultROCA<>(alphabet);
+        DefaultROCA<Character> roca = new DefaultROCA<>(alphabet);
         
-        ROCALocation q0_1 = roca1.addInitialLocation(true);
+        ROCALocation q0_1 = roca.addInitialLocation(true);
 
-        roca1.addSuccessor(q0_1, 0, 'a', 0, q0_1);
+        roca.setSuccessor(q0_1, 0, 'a', 0, q0_1);
 
         DefaultAutomatonWithCounterValuesROCA<Character> dfa = new DefaultAutomatonWithCounterValuesROCA<>(alphabet);
 
@@ -97,7 +97,7 @@ public class ROCARandomEQOracleTests {
 
         dfa.setSuccessor(q0_2, 'a', q0_2);
 
-        ROCARandomEQOracle<Character> oracle = new ROCARandomEQOracle<>(roca1);
+        ROCARandomEQOracle<Character> oracle = new ROCARandomEQOracle<>(roca);
 
         Assert.assertNotNull(oracle.findCounterExample(dfa.asAutomaton(), alphabet));
     }
@@ -113,23 +113,23 @@ public class ROCARandomEQOracleTests {
         ROCALocation q1_1 = roca1.addLocation(false);
         ROCALocation q2_1 = roca1.addLocation(true);
 
-        roca1.addSuccessor(q0_1, 0, 'a', +1, q0_1);
-        roca1.addSuccessor(q0_1, 1, 'a', +1, q0_1);
-        roca1.addSuccessor(q0_1, 1, 'b', 0, q1_1);
+        roca1.setSuccessor(q0_1, 0, 'a', +1, q0_1);
+        roca1.setSuccessor(q0_1, 1, 'a', +1, q0_1);
+        roca1.setSuccessor(q0_1, 1, 'b', 0, q1_1);
 
-        roca1.addSuccessor(q1_1, 0, 'a', 0, q2_1);
-        roca1.addSuccessor(q1_1, 1, 'b', -1, q1_1);
+        roca1.setSuccessor(q1_1, 0, 'a', 0, q2_1);
+        roca1.setSuccessor(q1_1, 1, 'b', -1, q1_1);
 
         DefaultROCA<Character> roca2 = new DefaultROCA<>(alphabet);
 
         ROCALocation q0_2 = roca2.addInitialLocation(false);
         ROCALocation q1_2 = roca2.addLocation(true);
 
-        roca2.addSuccessor(q0_2, 0, 'a', +1, q0_2);
-        roca2.addSuccessor(q0_2, 1, 'a', +1, q0_2);
-        roca2.addSuccessor(q0_2, 1, 'b', 0, q1_2);
+        roca2.setSuccessor(q0_2, 0, 'a', +1, q0_2);
+        roca2.setSuccessor(q0_2, 1, 'a', +1, q0_2);
+        roca2.setSuccessor(q0_2, 1, 'b', 0, q1_2);
 
-        roca2.addSuccessor(q1_2, 1, 'b', -1, q1_2);
+        roca2.setSuccessor(q1_2, 1, 'b', -1, q1_2);
 
         ROCARandomEQOracle<Character> oracle = new ROCARandomEQOracle<>(roca1);
 
