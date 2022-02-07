@@ -28,6 +28,7 @@ import java.util.Set;
 
 import de.learnlib.algorithms.lstar.roca.ObservationTreeNode.TableCell;
 import de.learnlib.api.algorithm.feature.GlobalSuffixLearner;
+import de.learnlib.api.logging.LearnLogger;
 import de.learnlib.api.oracle.EquivalenceOracle;
 import de.learnlib.api.oracle.MembershipOracle;
 import de.learnlib.api.query.DefaultQuery;
@@ -83,6 +84,8 @@ public class LStarROCA<I>
     public static final String CLOSED_TABLE_PROFILE_KEY = "Making the table closed, Sigma-consistent, and bottom-consistent";
     public static final String COUNTEREXAMPLE_DFA_PROFILE_KEY = "Searching for counterexample DFA";
     public static final String FINDING_PERIODIC_DESCRIPTIONS = "Computing periodic descriptions";
+
+    private static final LearnLogger LOGGER = LearnLogger.getLogger(LStarROCA.class);
 
     protected final Alphabet<I> alphabet;
 
@@ -179,6 +182,7 @@ public class LStarROCA<I>
             Word<I> counterexample = ceQuery.getInput();
             unclosed = table.increaseCounterLimit(counterLimit, counterexample.prefixes(false), Collections.emptyList(),
                     membershipOracle);
+            LOGGER.logPhase("Counter limit increased to " + counterLimit);
             completeConsistentTable(unclosed, true);
         }
 
@@ -208,6 +212,7 @@ public class LStarROCA<I>
             }
             assert MQUtil.isCounterexample(ce, hypothesis);
             lengthLongestCounterexample = Math.max(lengthLongestCounterexample, ce.getInput().length());
+            LOGGER.logCounterexample("Partial equivalence query counterexample " + ce.getInput().toString());
 
             int oldDistinctRows = table.numberOfDistinctRows();
             int oldSuffixes = table.numberOfSuffixes();
