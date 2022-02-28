@@ -58,7 +58,8 @@ import net.automatalib.words.impl.Alphabets;
  * @author Gaëtan Staquet
  */
 public class LStarVCA<I>
-        implements OTLearner.OTLearnerVCA<I>, GlobalSuffixLearner<VCAFromDescription<?, I>, I, Boolean>, SupportsGrowingAlphabet<I> {
+        implements OTLearner.OTLearnerVCA<I>, GlobalSuffixLearner<VCAFromDescription<?, I>, I, Boolean>,
+        SupportsGrowingAlphabet<I> {
 
     private final VPDAlphabet<I> alphabet;
 
@@ -142,9 +143,12 @@ public class LStarVCA<I>
 
     @Override
     public boolean refineHypothesis(DefaultQuery<I, Boolean> ceQuery) {
-
         // 1. We compute the new counter limit
-        counterLimit = OCAUtil.computeMaximalCounterValue(ceQuery.getInput(), alphabet);
+        // In practical cases, it may happen that the maximal counter value of the
+        // counterexample is lower than the current counter limit (if the equivalence
+        // oracle relies on conformance testing, for instance). Therefore, we must make
+        // sure we do not lower the counter limit.
+        counterLimit = Math.max(OCAUtil.computeMaximalCounterValue(ceQuery.getInput(), alphabet), counterLimit);
 
         // 2. We increase the counter limit in the oracles
         restrictedAutomatonEquivalenceOracle.setCounterLimit(counterLimit);

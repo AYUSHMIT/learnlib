@@ -155,11 +155,15 @@ public class LStarROCA<I>
             counterValueQueries.add(query);
         }
         counterValueOracle.processQueries(counterValueQueries);
+        // In practical cases, it may happen that the maximal counter value of the
+        // counterexample is lower than the current counter limit (if the equivalence
+        // oracle relies on conformance testing, for instance). Therefore, we must make
+        // sure we do not lower the counter limit.
         // @formatter:off
-        counterLimit = counterValueQueries.stream()
+        counterLimit = Math.max(counterLimit, counterValueQueries.stream()
             .map(query -> query.getOutput())
             .max(Integer::compare)
-            .get();
+            .get());
         // @formatter:on
 
         // 2. We increase the counter limit in the oracles
