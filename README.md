@@ -44,7 +44,7 @@ Note that LearnLib requires Java 8 or newer.
 
 #### Building development versions
 
-If you intend to use development versions of LearnLib, you can either use the deployed SNAPSHOT artifacts from the continuous integration server (see [Using Development Versions](https://github.com/LearnLib/learnlib/wiki/Using-Development-Versions)), or build them yourself.
+If you intend to use development versions of LearnLib, you can either use the deployed ROCA-FORK artifacts from the continuous integration server (see [Using Development Versions](https://github.com/LearnLib/learnlib/wiki/Using-Development-Versions)), or build them yourself.
 Simply clone the development branch of the repository
 
 ```

@@ -23,7 +23,7 @@ University of Mons and University Antwerpen added the dependencies over learnlib
     <parent>
         <groupId>de.learnlib</groupId>
         <artifactId>learnlib-build-parent</artifactId>
-        <version>0.17.0-SNAPSHOT</version>
+        <version>0.17.0-ROCA-FORK</version>
         <relativePath>../build-parent/pom.xml</relativePath>
     </parent>
 

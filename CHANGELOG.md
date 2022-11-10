@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.17.0-ROCA-FORK]
+
+### Added
+
+* Added the active learning algorithm based on L* for realtime one-counter automata and visibly one-counter automata.
+
 ## [0.17.0-SNAPSHOT] - Unreleased
 
 [Full changelog](https://github.com/LearnLib/learnlib/compare/learnlib-0.16.0...HEAD)
